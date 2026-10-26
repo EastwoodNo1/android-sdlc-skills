@@ -62,4 +62,6 @@ jobs:
           cache-provider: basic
       - name: Tests of the copied checks build
         working-directory: skills/android-ci/templates
-        run: mise exec -- ../../../gradlew -p build-logic/checks test koverVerify --warning-mode=all
+        run: |
+          cp ../reference/libs.versions.toml gradle/libs.versions.toml
+          mise exec -- ../../../gradlew -p build-logic/checks test koverVerify --warning-mode=all

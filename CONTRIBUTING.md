@@ -11,7 +11,7 @@ This repo follows the SuperSnake workflow where it applies to a repo that is not
 
 Templates are copies. Change a file in SuperSnake first, then copy it here and run `scripts/verify-templates.sh <SuperSnake checkout>`: it must print `0 drift`.
 
-Local checks: `scripts/verify-templates.sh ../SuperSnake`, `shellcheck`, `zizmor .github/`, and in `skills/android-ci/templates`: `mise exec -- ../../../gradlew -p build-logic/checks test koverVerify`.
+Local checks: `scripts/verify-templates.sh ../SuperSnake`, `shellcheck`, `zizmor .github/`, and in `skills/android-ci/templates`: `cp ../reference/libs.versions.toml gradle/libs.versions.toml` (git-ignored) then `mise exec -- ../../../gradlew -p build-logic/checks test koverVerify`.
 
 Repo settings are applied with `scripts/github/apply-repo-settings.sh EastwoodNo1/android-sdlc-skills`.
 
