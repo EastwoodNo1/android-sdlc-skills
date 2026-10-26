@@ -1,0 +1,30 @@
+min_version = "2026.10.18"
+
+[settings]
+lockfile = true
+
+[tools]
+"aqua:cli/cli" = "2.103.0"
+"aqua:zizmorcore/zizmor" = "1.31.1"
+
+[tools."github:adoptium/temurin25-binaries"]
+version = "jdk-25.0.5+8"
+version_prefix = ""
+
+[tools."github:adoptium/temurin25-binaries".platforms.macos-arm64]
+asset_pattern = "OpenJDK25U-jdk_aarch64_mac_hotspot_*.tar.gz"
+strip_components = 1
+bin_path = "Contents/Home/bin"
+
+[tools."github:adoptium/temurin25-binaries".platforms.linux-x64]
+asset_pattern = "OpenJDK25U-jdk_x64_linux_hotspot_*.tar.gz"
+strip_components = 1
+bin_path = "bin"
+
+[tools."github:adoptium/temurin25-binaries".platforms.linux-arm64]
+asset_pattern = "OpenJDK25U-jdk_aarch64_linux_hotspot_*.tar.gz"
+strip_components = 1
+bin_path = "bin"
+
+[env]
+JAVA_HOME = { value = "{{ tools['github:adoptium/temurin25-binaries'].path }}{% if os() == 'macos' %}/Contents/Home{% endif %}", tools = true }

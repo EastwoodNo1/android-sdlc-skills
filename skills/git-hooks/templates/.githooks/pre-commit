@@ -1,0 +1,13 @@
+#!/bin/sh
+. "$(dirname "$0")/lib.sh"
+if is_main_checkout; then
+  echo "refusing to commit in the main checkout: use a worktree (git worktree add ../SuperSnake-<name> -b <type>/<name>)" >&2
+  exit 1
+fi
+if on_main_branch; then
+  echo "refusing to commit on main: use a feature branch" >&2
+  exit 1
+fi
+enter_repo
+find_mise || exit 1
+"$MISE" exec -- ./gradlew --quiet --configuration-cache --continue :checkNoComments :ktlintCheck </dev/null >&2

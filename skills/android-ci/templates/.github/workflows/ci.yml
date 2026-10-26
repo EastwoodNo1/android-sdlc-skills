@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install mise
+        env:
+          MISE_VERSION: v2026.10.19
+          MISE_SHA256: b7ad610a39474b36663a6b1134c17086fa77e0f39b7ecce85c684165eed5f086
+        run: |
+          archive="$RUNNER_TEMP/mise.tar.gz"
+          curl -fsSL --retry 3 -o "$archive" "https://github.com/jdx/mise/releases/download/${MISE_VERSION}/mise-${MISE_VERSION}-linux-x64.tar.gz"
+          echo "${MISE_SHA256}  ${archive}" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/mise-install"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/mise-install"
+          sudo install -m 755 "$RUNNER_TEMP/mise-install/mise/bin/mise" /usr/local/bin/mise
+      - name: Install locked tools
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mise --version
+          mise trust
+          mise install --locked
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$sdkmanager" --licenses < <(yes) > /dev/null
+          "$sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: mise exec -- zizmor .github/
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6
+        with:
+          cache-provider: basic
+      - name: Check, release build and manifest
+        run: mise exec -- scripts/gradle-strict.sh check :checkNoComments :checkWorkflows :checkReleaseManifest :app:assembleRelease
+      - name: R8 mapping exists
+        run: test -s app/build/outputs/mapping/release/mapping.txt
+      - name: Check build-logic
+        run: mise exec -- scripts/gradle-strict.sh :checks:check :checks:koverVerify
+
+  pr-rules:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install mise
+        env:
+          MISE_VERSION: v2026.10.19
+          MISE_SHA256: b7ad610a39474b36663a6b1134c17086fa77e0f39b7ecce85c684165eed5f086
+        run: |
+          archive="$RUNNER_TEMP/mise.tar.gz"
+          curl -fsSL --retry 3 -o "$archive" "https://github.com/jdx/mise/releases/download/${MISE_VERSION}/mise-${MISE_VERSION}-linux-x64.tar.gz"
+          echo "${MISE_SHA256}  ${archive}" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/mise-install"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/mise-install"
+          sudo install -m 755 "$RUNNER_TEMP/mise-install/mise/bin/mise" /usr/local/bin/mise
+      - name: Install locked tools
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mise --version
+          mise trust
+          mise install --locked
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$sdkmanager" --licenses < <(yes) > /dev/null
+          "$sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6
+        with:
+          cache-provider: basic
+      - name: Collect pull request inputs
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          dir="$RUNNER_TEMP/pr"
+          mkdir -p "$dir"
+          printf '%s' "$PR_TITLE" > "$dir/title.txt"
+          printf '%s' "$PR_BODY" > "$dir/body.txt"
+          mise exec -- gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' > "$dir/labels.txt"
+          git log -z --no-merges --format=%B "origin/$BASE..HEAD" > "$dir/messages.bin"
+          git -c core.quotepath=false diff --name-only --no-renames "origin/$BASE...HEAD" > "$dir/paths.txt"
+      - name: Check commit messages and pull request
+        run: |
+          dir="$RUNNER_TEMP/pr"
+          mise exec -- scripts/gradle-strict.sh --continue :checkCommitMessages "-PmessagesFile=$dir/messages.bin" :checkPullRequest "-PtitleFile=$dir/title.txt" "-PbodyFile=$dir/body.txt" "-PlabelsFile=$dir/labels.txt" "-PpathsFile=$dir/paths.txt"

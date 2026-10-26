@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: EastwoodNo1/SuperSnake
+          path: supersnake
+          persist-credentials: false
+      - name: Install mise
+        env:
+          MISE_VERSION: v2026.10.19
+          MISE_SHA256: b7ad610a39474b36663a6b1134c17086fa77e0f39b7ecce85c684165eed5f086
+        run: |
+          archive="$RUNNER_TEMP/mise.tar.gz"
+          curl -fsSL --retry 3 -o "$archive" "https://github.com/jdx/mise/releases/download/${MISE_VERSION}/mise-${MISE_VERSION}-linux-x64.tar.gz"
+          echo "${MISE_SHA256}  ${archive}" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/mise-install"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/mise-install"
+          sudo install -m 755 "$RUNNER_TEMP/mise-install/mise/bin/mise" /usr/local/bin/mise
+      - name: Install locked tools
+        working-directory: skills/android-ci/templates
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mise --version
+          mise trust
+          mise install --locked
+      - name: Templates match SuperSnake
+        run: scripts/verify-templates.sh supersnake
+      - name: shellcheck
+        run: |
+          shellcheck --version
+          shellcheck scripts/verify-templates.sh scripts/github/apply-repo-settings.sh skills/android-ci/templates/scripts/github/apply-repo-settings.sh
+          shellcheck -s sh --exclude=SC1091,SC2034,SC2254 skills/git-hooks/templates/.githooks/* skills/git-hooks/templates/scripts/*.sh
+      - name: zizmor
+        working-directory: skills/android-ci/templates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: mise exec -- zizmor ../../../.github/
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6
+        with:
+          cache-provider: basic
+      - name: Tests of the copied checks build
+        working-directory: skills/android-ci/templates
+        run: mise exec -- ../../../gradlew -p build-logic/checks test koverVerify --warning-mode=all

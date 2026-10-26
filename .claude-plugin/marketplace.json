@@ -1,0 +1,15 @@
+{
+  "name": "android-sdlc-skills",
+  "description": "SDLC skills for Android/Kotlin projects",
+  "owner": {
+    "name": "EastwoodNo1",
+    "url": "https://github.com/EastwoodNo1"
+  },
+  "plugins": [
+    {
+      "name": "android-sdlc",
+      "source": "./",
+      "description": "Git hooks, GitHub Actions CI and SDLC rules for Android/Kotlin Gradle projects"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+#!/bin/sh
+. "$(dirname "$0")/lib.sh"
+enter_repo
+find_mise || exit 1
+message=$(mktemp) || exit 1
+trap 'rm -f "$message"' EXIT
+git stripspace --strip-comments <"$1" >"$message" || exit 1
+"$MISE" exec -- ./gradlew --quiet --configuration-cache :checkCommitMessage -PmessageFile="$message" </dev/null >&2

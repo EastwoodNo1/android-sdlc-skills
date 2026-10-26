@@ -1,0 +1,66 @@
+name: CodeQL
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 4 * * 1'
+
+permissions: {}
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [java-kotlin, actions]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - if: matrix.language == 'java-kotlin'
+        name: Install mise
+        env:
+          MISE_VERSION: v2026.10.19
+          MISE_SHA256: b7ad610a39474b36663a6b1134c17086fa77e0f39b7ecce85c684165eed5f086
+        run: |
+          archive="$RUNNER_TEMP/mise.tar.gz"
+          curl -fsSL --retry 3 -o "$archive" "https://github.com/jdx/mise/releases/download/${MISE_VERSION}/mise-${MISE_VERSION}-linux-x64.tar.gz"
+          echo "${MISE_SHA256}  ${archive}" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/mise-install"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/mise-install"
+          sudo install -m 755 "$RUNNER_TEMP/mise-install/mise/bin/mise" /usr/local/bin/mise
+      - if: matrix.language == 'java-kotlin'
+        name: Install locked tools
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mise --version
+          mise trust
+          mise install --locked
+      - if: matrix.language == 'java-kotlin'
+        name: Install Android SDK packages
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$sdkmanager" --licenses < <(yes) > /dev/null
+          "$sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.language == 'java-kotlin' && 'manual' || 'none' }}
+      - if: matrix.language == 'java-kotlin'
+        name: Build
+        run: mise exec -- ./gradlew --no-daemon --no-build-cache --no-configuration-cache assembleDebug
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370
+        with:
+          category: /language:${{ matrix.language }}

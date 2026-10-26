@@ -1,0 +1,14 @@
+#!/bin/sh
+. "$(dirname "$0")/lib.sh"
+while read -r _ _ remote_ref _; do
+  if [ "$remote_ref" = refs/heads/main ]; then
+    echo "refusing to push to main: open a pull request from a feature branch" >&2
+    exit 1
+  fi
+done
+enter_repo
+find_mise || exit 1
+if find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null | grep -q .; then
+  "$MISE" exec -- zizmor --offline .github/workflows/ >&2 || exit 1
+fi
+"$MISE" exec -- scripts/gradle-strict.sh check </dev/null >&2
