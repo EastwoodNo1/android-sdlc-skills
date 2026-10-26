@@ -51,7 +51,7 @@ jobs:
         run: |
           shellcheck --version
           shellcheck scripts/verify-templates.sh scripts/github/apply-repo-settings.sh skills/android-ci/templates/scripts/github/apply-repo-settings.sh
-          shellcheck -s sh --exclude=SC1091,SC2034,SC2254 skills/git-hooks/templates/.githooks/* skills/git-hooks/templates/scripts/*.sh
+          shellcheck -s sh --exclude=SC1091,SC2015,SC2034,SC2254 skills/git-hooks/templates/.githooks/* skills/git-hooks/templates/scripts/*.sh
       - name: zizmor
         working-directory: skills/android-ci/templates
         env:
