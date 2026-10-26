@@ -9,6 +9,8 @@ The hooks call Gradle tasks (`:checkNoComments`, `:ktlintCheck`, `:checkCommitMe
 
 Show the evidence named in each step. Never say a step worked without it.
 
+Command hygiene: type literal absolute paths (`${CLAUDE_SKILL_DIR}` is already expanded in this text) instead of shell variables or loops, run one lookup per command, and save downloads under `build/tmp/` in the project so permission rules and sandboxes can match them.
+
 ## Steps
 
 1. Check the project. Run `git rev-parse --show-toplevel`, `git log --oneline | head -3` (test-hooks needs one commit) and `ls settings.gradle.kts gradlew`. Evidence: the output. The project needs a root `:checkNoComments`, `:ktlintCheck` and `:checkCommitMessage`, plus a `:domain` module with `kotlin.test` for the push test. Otherwise stop and do the android-ci wiring.

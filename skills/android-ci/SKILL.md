@@ -5,7 +5,9 @@ description: Sets up GitHub Actions CI (checks, pr-rules, CodeQL), mise-pinned t
 
 # android-ci
 
-Templates sit in `${CLAUDE_SKILL_DIR}/templates/` and are byte copies of SuperSnake. They record what was verified on the day they were made. Do not trust them: re-verify every version and SHA below on the day you use them. Show the evidence named in each step.
+Templates sit in `${CLAUDE_SKILL_DIR}/templates/` and are byte copies of SuperSnake. They record what was verified on the day they were made. Do not trust them: re-verify every version and SHA below on the day you use them. Show the evidence named in each step. Work through the steps without stopping to ask, except that step 6 (anything outward-facing) needs the owner's approval: do it only when it was given, otherwise say it was skipped.
+
+Command hygiene: type literal absolute paths (`${CLAUDE_SKILL_DIR}` is already expanded in this text) instead of shell variables or loops, run one lookup per command, and save downloads under `build/tmp/` in the project so permission rules and sandboxes can match them.
 
 ## Steps
 
@@ -13,7 +15,7 @@ Templates sit in `${CLAUDE_SKILL_DIR}/templates/` and are byte copies of SuperSn
    - `actions/checkout`, `gradle/actions` (setup-gradle), `github/codeql-action` (init, analyze): `gh api repos/<owner>/<repo>/releases/latest` (codeql-action: list the `v4.x` releases, since latest returns the bundle tag) and `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`. If the object type is `tag`, dereference it with `git/tags/<sha>` to the commit SHA. Workflows use the full commit SHA.
    - mise: latest release tag, then `curl -fsSL <release>/SHASUMS256.txt`, the linux-x64 archive line, and `gh attestation verify <archive> --repo jdx/mise`. The version and SHA-256 are written in three places (`checks` and `pr-rules` in ci.yml, `java-kotlin` in codeql.yml). Update all three together.
    - zizmor: latest stable from https://github.com/zizmorcore/zizmor/releases (not a pre-release). Also gh, Gradle (`https://services.gradle.org/versions/current`, wrapper SHA-256), Temurin (Adoptium API) and ktlint (Maven metadata). Update `mise.toml`, then run `mise lock` and `mise install --locked`.
-   - Kotlin cap: Kotlin may only be as new as CodeQL lists at https://codeql.github.com/docs/codeql-overview/supported-languages-and-frameworks/. Evidence: the supported-version line you read.
+   - Kotlin cap: Kotlin may only be as new as CodeQL lists at https://codeql.github.com/docs/codeql-overview/supported-languages-and-frameworks/. Fetch the page with WebFetch, or save it with `curl -fsSL -o <file> <url>` and `grep -i kotlin <file>` (delete the file afterwards). Evidence: the supported-version line you read.
 2. Copy the templates: `.github/workflows/*`, `.github/dependabot.yml`, `.github/pull_request_template.md`, `SECURITY.md`, `mise.toml`, `mise.lock`, `.editorconfig`, `scripts/github/*`, `gradle/ktlint.gradle.kts`, `build-logic/checks/**`, and `scripts/gradle-strict.sh` (from the git-hooks templates). Evidence: `git status --short`.
 3. Wire Gradle. `build.gradle.kts` and `gradle/libs.versions.toml` in the templates are references from SuperSnake: merge them, do not overwrite.
    - `settings.gradle.kts`: `includeBuild("build-logic/checks")`.
