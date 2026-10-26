@@ -25,7 +25,7 @@ In a project's `.claude/settings.json`:
 }
 ```
 
-Or by hand: `claude plugin marketplace add EastwoodNo1/android-sdlc-skills` and `claude plugin install android-sdlc@android-sdlc-skills`. Try it without installing: `claude --plugin-dir <path to this repo>`.
+Or by hand, pinned to the tag: `claude plugin marketplace add EastwoodNo1/android-sdlc-skills#v0.1.0 --scope project` and `claude plugin install android-sdlc@android-sdlc-skills`. Try it without installing: `claude --plugin-dir <path to this repo>`.
 
 Docs used: https://code.claude.com/docs/en/plugins-reference, https://code.claude.com/docs/en/plugin-marketplaces, https://code.claude.com/docs/en/settings-reference, https://code.claude.com/docs/en/skills.
 

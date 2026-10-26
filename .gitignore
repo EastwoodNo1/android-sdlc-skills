@@ -6,3 +6,4 @@ local.properties
 .idea/
 .superpowers/
 .claude/settings.local.json
+skills/android-ci/templates/gradle/libs.versions.toml

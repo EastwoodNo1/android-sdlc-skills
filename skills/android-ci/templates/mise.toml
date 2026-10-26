@@ -4,7 +4,7 @@ min_version = "2026.10.18"
 lockfile = true
 
 [tools]
-"aqua:cli/cli" = "2.103.0"
+"aqua:cli/cli" = "2.103.2"
 "aqua:zizmorcore/zizmor" = "1.31.1"
 
 [tools."github:adoptium/temurin25-binaries"]
