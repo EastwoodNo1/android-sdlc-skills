@@ -69,13 +69,33 @@ ruleset_body='{
   ]
 }'
 
-ruleset_id="$(api "repos/$repo/rulesets" --jq '.[] | select(.name == "main-protection") | .id' | head -n1)"
-if [ -n "$ruleset_id" ]; then
-  printf '%s' "$ruleset_body" | api -X PUT "repos/$repo/rulesets/$ruleset_id" --input - >/dev/null
-else
-  printf '%s' "$ruleset_body" | api -X POST "repos/$repo/rulesets" --input - >/dev/null
-  ruleset_id="$(api "repos/$repo/rulesets" --jq '.[] | select(.name == "main-protection") | .id' | head -n1)"
-fi
+tag_ruleset_body='{
+  "name": "release-tags",
+  "target": "tag",
+  "enforcement": "active",
+  "bypass_actors": [],
+  "conditions": {"ref_name": {"include": ["refs/tags/v*"], "exclude": []}},
+  "rules": [
+    {"type": "deletion"},
+    {"type": "non_fast_forward"},
+    {"type": "update", "parameters": {"update_allows_fetch_and_merge": false}}
+  ]
+}'
+
+apply_ruleset() {
+  local name="$1" body="$2" id
+  id="$(api "repos/$repo/rulesets" --jq ".[] | select(.name == \"$name\") | .id" | head -n1)"
+  if [ -n "$id" ]; then
+    printf '%s' "$body" | api -X PUT "repos/$repo/rulesets/$id" --input - >/dev/null
+  else
+    printf '%s' "$body" | api -X POST "repos/$repo/rulesets" --input - >/dev/null
+    id="$(api "repos/$repo/rulesets" --jq ".[] | select(.name == \"$name\") | .id" | head -n1)"
+  fi
+  printf '%s' "$id"
+}
+
+ruleset_id="$(apply_ruleset main-protection "$ruleset_body")"
+tag_ruleset_id="$(apply_ruleset release-tags "$tag_ruleset_body")"
 
 if api "repos/$repo/labels/dependencies" >/dev/null 2>&1; then
   api -X PATCH "repos/$repo/labels/dependencies" -f color=0366d6 -f description="Dependency updates" >/dev/null
@@ -89,6 +109,7 @@ pvr_json="$(api "repos/$repo/private-vulnerability-reporting")"
 wf_json="$(api "repos/$repo/actions/permissions/workflow")"
 fork_json="$(api "repos/$repo/actions/permissions/fork-pr-contributor-approval")"
 rs_json="$(api "repos/$repo/rulesets/$ruleset_id")"
+tag_rs_json="$(api "repos/$repo/rulesets/$tag_ruleset_id")"
 label_json="$(api "repos/$repo/labels/dependencies")"
 
 actual="$(jq -n \
@@ -98,6 +119,7 @@ actual="$(jq -n \
   --argjson wf "$wf_json" \
   --argjson fork "$fork_json" \
   --argjson rs "$rs_json" \
+  --argjson trs "$tag_rs_json" \
   --argjson label "$label_json" '{
     repo: {
       allow_rebase_merge: $repo.allow_rebase_merge,
@@ -131,6 +153,15 @@ actual="$(jq -n \
       required_status_checks: ($rs.rules[] | select(.type == "required_status_checks") | .parameters
         | {strict_required_status_checks_policy,
            required_status_checks: (.required_status_checks | sort_by(.context))})
+    },
+    tag_ruleset: {
+      name: $trs.name,
+      target: $trs.target,
+      enforcement: $trs.enforcement,
+      bypass_actors: $trs.bypass_actors,
+      include: $trs.conditions.ref_name.include,
+      exclude: $trs.conditions.ref_name.exclude,
+      rule_types: ([$trs.rules[].type] | sort)
     },
     label: {name: $label.name}
   }')"

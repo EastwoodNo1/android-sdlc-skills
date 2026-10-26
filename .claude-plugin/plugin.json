@@ -1,7 +1,7 @@
 {
   "name": "android-sdlc",
   "displayName": "Android SDLC",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Git hooks, GitHub Actions CI and SDLC rules for Android/Kotlin Gradle projects, extracted from SuperSnake",
   "author": {
     "name": "EastwoodNo1",
