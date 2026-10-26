@@ -41,6 +41,15 @@
       ]
     }
   },
+  "tag_ruleset": {
+    "name": "release-tags",
+    "target": "tag",
+    "enforcement": "active",
+    "bypass_actors": [],
+    "include": ["refs/tags/v*"],
+    "exclude": [],
+    "rule_types": ["deletion", "non_fast_forward", "update"]
+  },
   "label": {
     "name": "dependencies"
   }
