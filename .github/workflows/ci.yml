@@ -52,6 +52,9 @@ jobs:
           shellcheck --version
           shellcheck scripts/verify-templates.sh scripts/github/apply-repo-settings.sh skills/android-ci/templates/scripts/github/apply-repo-settings.sh
           shellcheck -s sh --exclude=SC1091,SC2015,SC2034,SC2254 skills/git-hooks/templates/.githooks/* skills/git-hooks/templates/scripts/*.sh
+          shellcheck --exclude=SC1090,SC1091,SC2016,SC2317,SC2329 skills/adlc-docs/scripts/*.sh skills/adlc-docs/tests/run.sh skills/adlc-docs/tests/lib/*.sh skills/adlc-docs/tests/test_*.sh
+      - name: ADLC docs tests
+        run: bash skills/adlc-docs/tests/run.sh
       - name: zizmor
         working-directory: skills/android-ci/templates
         env:
