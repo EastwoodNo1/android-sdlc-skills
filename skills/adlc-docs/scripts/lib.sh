@@ -68,3 +68,46 @@ adlc_human_prompt_count() {
   esac
   jq -Rn "$ADLC_JQ_DEFS"'[inputs | fromjson? | select(type == "object") | human_text] | length' <"$2"
 }
+
+adlc_redact() {
+  local file=$1 state=$2 tmp
+  tmp=$(mktemp "${file}.XXXXXX") || return 1
+  sed -E \
+    -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[redacted]/g' \
+    -e 's#/Users/[^/ ]+#[redacted]#g' \
+    -e 's#/home/[^/ ]+#[redacted]#g' \
+    "$file" >"$tmp" || {
+    rm -f "$tmp"
+    return 1
+  }
+  if [ -s "$state/deny-list" ]; then
+    local tmp2
+    tmp2=$(mktemp "${file}.XXXXXX") || {
+      rm -f "$tmp"
+      return 1
+    }
+    awk '
+      FNR == NR {
+        if (length($0) > 0) terms[++n] = tolower($0)
+        next
+      }
+      {
+        line = $0
+        for (i = 1; i <= n; i++) {
+          out = ""
+          while ((pos = index(tolower(line), terms[i])) > 0) {
+            out = out substr(line, 1, pos - 1) "[redacted]"
+            line = substr(line, pos + length(terms[i]))
+          }
+          line = out line
+        }
+        print line
+      }
+    ' "$state/deny-list" "$tmp" >"$tmp2" || {
+      rm -f "$tmp" "$tmp2"
+      return 1
+    }
+    mv "$tmp2" "$tmp"
+  fi
+  mv "$tmp" "$file"
+}
