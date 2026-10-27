@@ -1,13 +1,13 @@
 {
   "name": "android-sdlc",
   "displayName": "Android SDLC",
-  "version": "0.1.1",
-  "description": "Git hooks, GitHub Actions CI and SDLC rules for Android/Kotlin Gradle projects, extracted from SuperSnake",
+  "version": "0.2.0",
+  "description": "Git hooks, GitHub Actions CI, SDLC rules and automatic ADLC lifecycle documentation for Android/Kotlin Gradle projects, extracted from SuperSnake",
   "author": {
     "name": "EastwoodNo1",
     "url": "https://github.com/EastwoodNo1"
   },
   "homepage": "https://github.com/EastwoodNo1/android-sdlc-skills",
   "repository": "https://github.com/EastwoodNo1/android-sdlc-skills",
-  "keywords": ["android", "kotlin", "ci", "git-hooks", "sdlc"]
+  "keywords": ["android", "kotlin", "ci", "git-hooks", "sdlc", "adlc"]
 }

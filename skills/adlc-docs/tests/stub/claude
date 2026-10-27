@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+[ -n "${ADLC_STUB_LOG:-}" ] && printf '%s\n' "$*" >>"$ADLC_STUB_LOG"
+[ "${ADLC_STUB_FAIL:-}" = "1" ] && exit 1
+for arg in "$@"; do
+  case "$arg" in
+    *"NOTE: "*)
+      path=$(printf '%s\n' "$arg" | sed -n 's/^NOTE: //p' | head -n 1)
+      digest=$(printf '%s\n' "$arg" | sed -n 's/^DIGEST: //p' | head -n 1)
+      [ -s "$digest" ] || exit 3
+      [ "${ADLC_STUB_NO_WRITE:-}" = "1" ] && exit 0
+      if [ -n "$path" ]; then
+        printf '# stub note\nContact someone@example.com about /Users/x/project\n' >"$path"
+        [ "${ADLC_STUB_SECRET:-}" = "1" ] && printf 'Ticket PROJ-42 and REQ-001\n' >>"$path"
+        [ "${ADLC_STUB_BAD_BYTE:-}" = "1" ] && printf 'bad \377 byte\n' >>"$path"
+      fi
+      ;;
+  esac
+done
+[ "${ADLC_STUB_FAIL_AFTER_WRITE:-}" = "1" ] && exit 1
+exit 0

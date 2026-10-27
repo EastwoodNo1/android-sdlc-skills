@@ -9,7 +9,7 @@
     {
       "name": "android-sdlc",
       "source": "./",
-      "description": "Git hooks, GitHub Actions CI and SDLC rules for Android/Kotlin Gradle projects"
+      "description": "Git hooks, GitHub Actions CI, SDLC rules and automatic ADLC lifecycle documentation for Android/Kotlin Gradle projects"
     }
   ]
 }

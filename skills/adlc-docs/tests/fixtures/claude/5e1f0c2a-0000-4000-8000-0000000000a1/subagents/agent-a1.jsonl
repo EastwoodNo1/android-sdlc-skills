@@ -1,0 +1,2 @@
+{"type":"user","isSidechain":true,"timestamp":"2026-01-01T10:00:12.000Z","sessionId":"5e1f0c2a-0000-4000-8000-0000000000a1","message":{"role":"user","content":"Check the parser."}}
+{"type":"assistant","isSidechain":true,"timestamp":"2026-01-01T10:00:13.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Parser is fine."},{"type":"tool_use","id":"s1","name":"Glob","input":{"pattern":"**/*.kt"}},{"type":"tool_use","id":"s2","name":"Task","input":{"description":"Summarize findings"}}]}}
