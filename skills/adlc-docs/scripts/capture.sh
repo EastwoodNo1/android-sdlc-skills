@@ -109,7 +109,7 @@ rc=0
       ${plugin_args[@]+"${plugin_args[@]}"} \
       --settings '{"disableAllHooks":true}' --no-session-persistence \
       --permission-mode dontAsk \
-      --allowedTools "Read" "Grep" "Glob" "Write(/${state}/staged/**)" \
+      --allowedTools "Read" "Grep" "Glob" "Edit(/${state}/staged/**)" \
       "Bash(git log:*)" "Bash(git show:*)" "Bash(gh pr view:*)" "Bash(gh pr list:*)" \
       -- "$prompt"
 ) || rc=$?

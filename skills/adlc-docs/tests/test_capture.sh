@@ -97,6 +97,8 @@ t_capture_passes_model_and_loop_guard() {
   cap_run
   assert_contains "$(cat "$ADLC_STUB_LOG")" "--model sonnet"
   assert_contains "$(cat "$ADLC_STUB_LOG")" "disableAllHooks"
+  assert_contains "$(cat "$ADLC_STUB_LOG")" "Edit(/${STATE}/staged/**)"
+  assert_not_contains "$ADLC_STUB_LOG" "Write("
 }
 
 t_capture_rejects_unknown_runner_mode() {
