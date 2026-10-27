@@ -129,7 +129,9 @@ rc=0
       ${plugin_args[@]+"${plugin_args[@]}"} \
       --settings '{"disableAllHooks":true}' --no-session-persistence \
       --permission-mode dontAsk \
-      --allowedTools "Read(/${workdir}/**)" "Read(/${top}/**)" "Edit(/${workdir}/**)" \
+      --allowedTools "Read(/${workdir}/**)" "Read(/${top}/**)" \
+      "Grep(/${workdir}/**)" "Grep(/${top}/**)" "Glob(/${workdir}/**)" "Glob(/${top}/**)" \
+      "Edit(/${workdir}/**)" \
       --disallowedTools "Read(/${top}/.git/**)" \
       -- "$prompt" </dev/null
 ) || rc=$?

@@ -27,11 +27,12 @@ A session-end hook captures each non-trivial session into a staged note, without
 Before opening or updating a pull request, check `$(git rev-parse --path-format=absolute --git-common-dir)/adlc/staged/`. If it has notes:
 
 1. Run `android-sdlc:adlc-documenter` in fold-in mode in the PR's worktree. The prompt starts with `MODE: fold-in`, then `STAGED: <dir>` and `REPO: <worktree path>`.
-2. Commit the result as `docs(adlc): fold in session notes`.
-3. Save the returned durable lessons as memories (type `feedback` or `project`), after checking for duplicates. Only the main session has the memory system, so the documenter does not write memory.
-4. Delete the folded files from `staged/`, only after the commit.
+2. Run `scan.sh docs/adlc "$(git rev-parse --path-format=absolute --git-common-dir)/adlc"`. It prints `file:line: class` for each privacy hit and exits 1. Fix every hit before committing.
+3. Commit the result as `docs(adlc): fold in session notes`.
+4. Save the returned durable lessons as memories (type `feedback` or `project`), after checking for duplicates. Only the main session has the memory system, so the documenter does not write memory.
+5. Delete the folded files from `staged/`, only after the commit.
 
-Pending notes from a trivial PR carry to the next one. At the end of a project, or before building a presentation, run one fold-in now and open a single `docs(adlc)` pull request.
+The documenter copies the staged notes and never deletes them. Pending notes from a trivial PR carry to the next one. At the end of a project, or before building a presentation, run one fold-in now and open a single `docs(adlc)` pull request.
 
 ### Historical reconstruction
 
@@ -63,7 +64,7 @@ Preserve failures, iterations, rejected approaches, reversed decisions and feedb
 
 ### Privacy
 
-The repository is public. No email addresses, people's names other than the owner handle, employer or internal system names, absolute home paths, tokens or Jira keys in `docs/adlc/`. The documenter applies the privacy filter.
+The repository is public. No email addresses, people's names other than the owner handle, employer or internal system names, absolute home paths, tokens or Jira keys in `docs/adlc/`. The documenter applies the privacy filter, and `scan.sh` checks the result before the fold-in commit.
 
 ### Educational purpose
 

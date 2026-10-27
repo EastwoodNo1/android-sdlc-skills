@@ -16,7 +16,7 @@ An adapter supplies three parts:
 
 Only `claude` is implemented. For `codex` and `copilot`, `session-end.sh` exits 0 with the stderr note "adapter not implemented".
 
-The staging folder holds `staged/`, `digests/`, `log/`, `captured`, `lock`, and the owner's `enabled`, `disabled` and `deny-list` files, all under `<git-common-dir>/adlc/`. The agent writes its raw note to a private temporary directory outside `.git`, because Claude Code refuses writes inside `.git`; `capture.sh` redacts it and moves it to `staged/`.
+The state folder holds `staged/`, `log/` (including `redactions.log`), `captured`, `failed`, `trivial`, `lock`, and the owner's `enabled`, `disabled` and `deny-list` files, all under `<git-common-dir>/adlc/`. Capture writes the digest and the agent writes its raw note in a private temporary directory outside `.git`, because Claude Code refuses writes inside `.git`; `capture.sh` redacts the note and moves it to `staged/`. The digest is regenerated on every run and is never kept in the state folder.
 
 ## Claude Code (implemented)
 
@@ -29,12 +29,14 @@ The staging folder holds `staged/`, `digests/`, `log/`, `captured`, `lock`, and 
 claude -p --agent android-sdlc:adlc-documenter --model sonnet \
   --settings '{"disableAllHooks":true}' --no-session-persistence \
   --permission-mode dontAsk \
-  --allowedTools "Read" "Grep" "Glob" "Edit(/<workdir>/**)" \
-  "Bash(git log:*)" "Bash(git show:*)" "Bash(gh pr view:*)" "Bash(gh pr list:*)" \
+  --allowedTools "Read(/<workdir>/**)" "Read(/<toplevel>/**)" \
+  "Grep(/<workdir>/**)" "Grep(/<toplevel>/**)" "Glob(/<workdir>/**)" "Glob(/<toplevel>/**)" \
+  "Edit(/<workdir>/**)" --disallowedTools "Read(/<toplevel>/.git/**)" \
   -- "<prompt>"
 ```
 
-  `<workdir>` is a fresh `mktemp -d` directory outside `.git`, resolved with `pwd -P`. Claude Code refuses writes inside `.git`, so the agent writes only `<workdir>/<session_id>.md`; `capture.sh` redacts it, moves it to `staged/` and deletes the directory.
+  `<workdir>` is a fresh `mktemp -d` directory outside `.git`, resolved with `pwd -P`, and `<toplevel>` is the repository top level. Both start with `/`, so the rules begin with `//`, which Claude Code reads as an absolute path. Every rule is path-scoped: the agent reads only the work directory and the repository, and has no Bash rule. Checked with the real CLI: path-scoped `Grep(...)` and `Glob(...)` rules are accepted without a warning and deny paths outside them; a bare `Read` rule does not enable `Grep` or `Glob`. A `Write(path)` rule is ignored, so the agent uses `Edit`. The prompt's `DIGEST:` is `<workdir>/digest.md` and `NOTE:` is `<workdir>/<session_id>.md`. The agent writes only `NOTE`; `capture.sh` redacts it, moves it to `staged/` and deletes the directory.
+  - Failure: `capture.sh` appends the session id to `failed`, one line per failure. Backfill and session start skip an id with two lines in `failed`. Backfill also records sessions with fewer than three prompts in `trivial` and skips them.
 - Instructions file: `CLAUDE.md`.
 - Source: https://code.claude.com/docs/en/hooks
 

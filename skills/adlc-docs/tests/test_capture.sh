@@ -140,9 +140,13 @@ t_capture_permissions_are_path_scoped() {
   assert_contains "$args" "Edit(/$(cd "$T/tmp" && pwd -P)/adlc-work."
   assert_contains "$args" "--disallowedTools Read(/$top/.git/**)"
   assert_not_contains "$ADLC_STUB_LOG" "Bash("
-  assert_not_contains "$ADLC_STUB_LOG" "Grep"
-  assert_not_contains "$ADLC_STUB_LOG" "Glob"
+  assert_contains "$args" "Grep(/$top/**)"
+  assert_contains "$args" "Glob(/$top/**)"
+  assert_contains "$args" "Grep(/$(cd "$T/tmp" && pwd -P)/adlc-work."
+  assert_contains "$args" "Glob(/$(cd "$T/tmp" && pwd -P)/adlc-work."
   assert_not_contains "$ADLC_STUB_LOG" "allowedTools Read "
+  assert_not_contains "$ADLC_STUB_LOG" " Grep "
+  assert_not_contains "$ADLC_STUB_LOG" " Glob "
 }
 
 t_capture_rejects_unknown_runner_mode() {

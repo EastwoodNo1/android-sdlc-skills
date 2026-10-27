@@ -63,6 +63,7 @@ skills/adlc-docs/scripts/session-end.sh    harness-neutral SessionEnd entry
 skills/adlc-docs/scripts/session-start.sh  harness-neutral SessionStart entry: catch-up sweep + reminder
 skills/adlc-docs/scripts/capture.sh        detached worker: digest + headless documenter
 skills/adlc-docs/scripts/digest.sh         transcript JSONL -> compact Markdown digest
+skills/adlc-docs/scripts/scan.sh           read-only privacy scan of a directory, run before the fold-in commit
 skills/adlc-docs/scripts/backfill.sh       run capture over existing transcripts
 skills/adlc-docs/tests/*                   shell tests with fixture transcripts
 ```
@@ -108,7 +109,9 @@ The file `<git-common-dir>/adlc/disabled` turns everything off for that repo. `A
 Contents:
 
 - `staged/<YYYY-MM-DD>-<session-id-8>.md`: finished, privacy-filtered notes waiting for fold-in.
-- `digests/<session-id>.md`: deleted after a successful capture.
+- `failed`: one session id per line for every failed capture. Backfill and `SessionStart` skip an id that has two lines.
+- `trivial`: session ids with fewer than 3 human prompts, recorded by backfill and skipped afterwards.
+- `log/redactions.log`: one line per redaction class hit (time, session id, class), never the matched text.
 - `log/<session-id>.log`: capture output, kept for troubleshooting, the last 50 kept.
 - `captured`: one session id per line. Makes capture idempotent (backfill and re-runs skip ids already captured).
 - `lock`: a directory used as a mutex (`mkdir`) so two captures don't run at once. Stale after 30 minutes.
@@ -141,17 +144,18 @@ If the agent does not resolve that way, the runner passes the agent body through
 
    Otherwise it starts `capture.sh` fully detached and returns. The detach uses `nohup` with stdin from `/dev/null`, output to the log, `&`, then `disown`; macOS has no `setsid`. It must return well inside 1.5 s, and does no heavy work itself.
 3. `capture.sh` takes the lock, then:
-   - runs `digest.sh` on the main transcript plus its subagent transcripts
+   - creates a private work directory with `mktemp -d` outside `.git` (Claude Code refuses writes inside `.git`) and runs `digest.sh` on the main transcript plus its subagent transcripts into `<workdir>/digest.md`. The digest is regenerated on every run and is not kept in the state folder
    - runs `claude -p` with:
      - env `ADLC_CAPTURE=1`
      - `--agent android-sdlc:adlc-documenter --model sonnet`
      - `--settings '{"disableAllHooks":true}'`
      - `--no-session-persistence`
      - `--permission-mode dontAsk`
-     - `--allowedTools` limited to `Read`, `Grep`, `Glob`, read-only `git log`/`git show`/`gh pr view`/`gh pr list`, and `Write` into the staging folder only
-     - a prompt naming capture mode, the digest path, the output note path and the repo path
-   - on success, appends the id to `captured`, deletes the digest and releases the lock
-   - on failure, keeps the digest and logs. The next `SessionEnd` or `backfill.sh` retries.
+     - `--allowedTools` limited to path-scoped `Read`, `Grep` and `Glob` rules for the work directory and the repository top level, and `Edit(//<workdir>/**)`. There is no Bash rule and no unscoped rule. `Write(path)` rules are ignored by Claude Code, so the agent writes with `Edit`
+     - a prompt naming capture mode, the digest path, the raw note path in the work directory and the repo path
+   - redacts the raw note mechanically, then moves it to `staged/`
+   - on success, appends the id to `captured`, deletes the work directory and releases the lock
+   - on failure, appends the id to `failed` and logs. `backfill.sh`, also run by `SessionStart`, retries it until the id has two lines in `failed`; deleting those lines resets it.
 4. The documenter, in capture mode, writes one staged note (format below), applying `privacy.md`. It writes nothing else.
 
 ### Staged note format
@@ -179,7 +183,7 @@ IDs: staged notes carry no stable IDs. Fold-in allocates `PROMPT-`, `DEC-`, `REQ
 
 The policy in the project's `CLAUDE.md` says: before opening or updating a PR, if `<git-common-dir>/adlc/staged/` has notes, invoke `android-sdlc:adlc-documenter` in fold-in mode in the PR's worktree. The documenter:
 
-1. Moves each staged note to `docs/adlc/sessions/<date>-<topic>.md`, the committed session record.
+1. Copies each staged note to `docs/adlc/sessions/<date>-<topic>.md`, the committed session record. The staged original stays in place.
 2. Updates the logs, appending rather than rewriting:
    - `PROJECT_EVOLUTION_TIMELINE.md`
    - `PROMPT_AND_INTERACTION_LOG.md`
@@ -188,9 +192,9 @@ The policy in the project's `CLAUDE.md` says: before opening or updating a PR, i
    - `SOURCE_AND_UNCERTAINTY_REGISTER.md`
    - `PRESENTATION_SOURCE_GUIDE.md`
 3. Revises `ADLC_PROCESS.md`, including its "Documentation status" with the last folded session.
-4. Re-applies the privacy filter to everything it wrote.
+4. Re-applies the privacy filter to everything it wrote. Before the fold-in commit the main agent runs `scan.sh docs/adlc "<state>"`, which exits 1 on any hit, and fixes the hits first.
 5. Returns the list of durable lessons. The main agent saves those as Claude memories (type `feedback` or `project`), after checking for duplicates. Only the main session has the memory system, so the documenter does not write memory itself.
-6. Deletes the folded notes from `staged/` only after the main agent has committed the docs.
+6. The main agent, not the documenter, deletes the folded notes from `staged/`, only after committing the docs.
 
 The documentation commit is `docs(adlc): ...` in the same PR. The policy text and the `SessionStart` reminder are the enforcement. There is no CI check in this version.
 
@@ -203,11 +207,12 @@ Applied in capture and again in fold-in.
 - Remove: email addresses, people's names other than the GitHub owner handle, employer and internal tool, plugin or connector names unrelated to the project, absolute home paths (rewrite to `~/` or repo-relative), tokens, keys and anything secret-shaped, Jira keys and internal URLs.
 - Quote prompts verbatim only when they are about the project and contain nothing above. Otherwise paraphrase as `Reconstructed prompt intent - not verbatim`.
 - Never quote tool output that could contain environment data.
-- `capture.sh` runs a final mechanical scan of the staged note: an email regex, `/Users/` and `/home/` paths, and a deny-list file at `<git-common-dir>/adlc/deny-list` (one term per line, owner-maintained, never committed). A hit redacts the match to `[redacted]` and logs it.
+- `capture.sh` redacts the raw note mechanically before it is staged: an email regex, `/Users/` and `/home/` paths, GitHub, API, AWS, Slack, Bearer and JWT tokens, PEM private key blocks, Jira-style keys (except the documentation ID prefixes `REQ`, `AC`, `DEC`, `DES`, `IMP`, `TEST`, `PROMPT` and `CYCLE`), and a deny-list file at `<git-common-dir>/adlc/deny-list` (one term per line, owner-maintained, never committed). A hit redacts the match to `[redacted]` and appends the hit class to `log/redactions.log`.
+- `scan.sh <dir> [<state-dir>]` runs the same patterns read-only and prints `file:line: class`, never the matched text. It exits 1 on any hit. It is the second layer, run on `docs/adlc` before the fold-in commit.
 
 ### Backfill
 
-`backfill.sh [--harness claude] [--project-dir <repo>]` finds the repo's transcripts under `~/.claude/projects/<slug>/`, where the slug is the repo path with `/` turned into `-`. It includes worktree slugs (`<slug>-*` folders whose session `cwd` sits inside the repo or its worktrees). For each session not yet in `captured`, oldest first, it runs `capture.sh` in the foreground, one at a time. `--limit N` caps the count: no limit when run by hand, 3 when run from `SessionStart`. It skips sessions whose transcript changed in the last 10 minutes, because those may still be live. Reconstruction of everything before the first session (git, PRs, plans, ADRs) is a fold-in task: on the first fold-in with an unpopulated `ADLC_PROCESS.md`, the documenter runs the template's historical reconstruction.
+`backfill.sh [--harness claude] [--project-dir <repo>]` finds the repo's transcripts under `~/.claude/projects/<slug>/`, where the slug is the repo path with every non-alphanumeric character turned into `-`. It includes worktree slugs (`<slug>-*` folders whose session `cwd` sits inside the repo or its worktrees). For each session not yet in `captured`, oldest first, it runs `capture.sh` in the foreground, one at a time. It skips ids with two lines in `failed` and ids in `trivial`, and records new trivial ids. `--limit N` caps the count: no limit when run by hand, 3 when run from `SessionStart`. It skips sessions whose transcript changed in the last 10 minutes, because those may still be live. Reconstruction of everything before the first session (git, PRs, plans, ADRs) is a fold-in task: on the first fold-in with an unpopulated `ADLC_PROCESS.md`, the documenter runs the template's historical reconstruction.
 
 The skill also tells adopters to raise `cleanupPeriodDays` (suggested 365, in user settings) so raw evidence survives until the project ends. It tells them, and does not change settings itself.
 
@@ -229,8 +234,8 @@ The skill also tells adopters to raise `cleanupPeriodDays` (suggested 365, in us
   - starts capture when opted in, tested with a stub `claude` on `PATH` that writes a note
   - returns in under 1 s
 - `capture.sh` with the stub `claude`:
-  - writes the note, updates `captured`, removes the digest, applies the mechanical redaction (the fixture contains an email and a `/Users/` path)
-  - on stub failure, keeps the digest
+  - writes the note, updates `captured`, applies the mechanical redaction (the fixture contains an email and a `/Users/` path), leaves no work directory behind
+  - on stub failure, appends the id to `failed`
 - `backfill.sh` skips captured ids.
 - `claude plugin validate .` passes, run locally and recorded as evidence.
 
@@ -275,3 +280,15 @@ Real-world check, recorded as PR evidence:
 - Staged notes carry no IDs. Fold-in allocates them.
 - One on-demand "fold in now" PR at the end of a project, as the only exception to "no separate documentation PRs".
 - Cost: one Sonnet run per non-trivial session, on the owner's normal Claude Code account. There is no cap besides the off switch.
+
+## Changes during implementation
+
+- Raw note in a private `mktemp -d` work directory outside `.git`, then redacted and moved to `staged/`. Reason: Claude Code refuses writes inside `.git`, even with a matching allow rule.
+- `Edit(//<workdir>/**)` instead of `Write(<path>)`. Reason: Claude Code ignores `Write(path)` allow rules.
+- Fold-in copies the staged notes and the main agent deletes them after the commit. Reason: the documenter must not delete anything, and a failed commit must not lose notes.
+- Backfill slug: every non-alphanumeric character becomes `-`, not only `/`. Reason: that is how Claude Code names the folders, for example for dots in a repo name.
+- Retries happen through backfill and `SessionStart`, bounded by two lines in `failed`, not through a later `SessionEnd`. Reason: no endless retry loop, and an owner-visible reset.
+- Digests are no longer kept in the state folder. They live in the work directory and are regenerated on every run. Reason: the agent then reads only the work directory and the repository.
+- Capture permissions are path-scoped, with no Bash rule. Reason: unrestricted `Read`, `Grep`, `Glob` and `git log`/`git show` (which accept `--output`) are wider than capture needs.
+- New `scan.sh`, `failed` and `trivial` files and `log/redactions.log`. Reasons: a second privacy check before the public commit, bounded retries, skipping trivial sessions without parsing them again, and making "a hit is logged" true.
+- More redaction classes: GitHub, API, AWS, Slack, Bearer and JWT tokens, PEM private keys and Jira-style keys. Reason: the first filter caught only emails, home paths and the deny-list.

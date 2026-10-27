@@ -19,13 +19,13 @@ The first line of the prompt is `MODE: capture` or `MODE: fold-in`. Do exactly w
 
 The prompt continues with:
 
-- `DIGEST: <path>`: a Markdown digest of one session
+- `DIGEST: <path>`: a Markdown digest of one session, in the private work directory
 - `NOTE: <path>`: a private work path outside the repository to write the note to; the capture script redacts it and moves it into `staged/`
-- `REPO: <path>`: the repository, for read-only evidence from git and pull requests
+- `REPO: <path>`: the repository, for read-only evidence from its files (plans, specs, docs)
 - `SESSION: <id>`
 - `HARNESS: <name>`
 
-Read the digest and, where it helps, git history and pull requests of the repository. Write one staged note to `NOTE` in the staged note format below. Write nothing else: no other file, no change in the repository. Apply the privacy rules below.
+Read the digest and, where it helps, files of the repository. You can read only the work directory and the repository, and write only `NOTE`. You have no shell in this mode. Write one staged note to `NOTE` in the staged note format below. Write nothing else: no other file, no change in the repository. Apply the privacy rules below.
 
 ### MODE: fold-in
 
@@ -46,7 +46,8 @@ Write only under `REPO/docs/adlc/`. Do not delete staged notes: the main agent d
    - `PRESENTATION_SOURCE_GUIDE.md`
 3. Revise `ADLC_PROCESS.md`, including `Last folded session:` in its Documentation Status.
 4. Re-apply the privacy rules to everything you wrote.
-5. Finish with the completion report, ending with these two sections:
+5. Tell the main agent in the report that it runs `scan.sh docs/adlc "<state>"` and fixes every hit before the fold-in commit.
+6. Finish with the completion report, ending with these two sections:
    - `## Durable lessons`: bullets of "always do X because Y" lessons worth saving as assistant memory. Empty is allowed.
    - `## Folded`: the file names of the staged notes you folded.
 
@@ -83,7 +84,7 @@ Apply these in capture and again in fold-in. The repository is public.
 - Rewrite absolute home paths to `~/` or a repo-relative path.
 - Quote a prompt verbatim only when it is about the project and contains nothing above. Otherwise paraphrase it and label it `Reconstructed prompt intent - not verbatim`.
 - Never quote tool output that could contain environment data.
-- A mechanical scan runs after capture and redacts emails, `/Users/` and `/home/` paths and deny-list terms. Do not rely on it.
+- A mechanical redaction runs after capture and replaces emails, `/Users/` and `/home/` paths, secret-shaped tokens, PEM private keys, Jira-style keys (except `REQ`, `AC`, `DEC`, `DES`, `IMP`, `TEST`, `PROMPT` and `CYCLE` IDs) and deny-list terms. Do not rely on it. At fold-in, the main agent also runs `scan.sh` on `docs/adlc` before the commit.
 
 ## Core responsibilities
 
