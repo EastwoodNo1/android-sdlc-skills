@@ -18,7 +18,9 @@ bf_setup() {
   : >"$RECORD"
   cat >"$T/recorder.sh" <<REC
 #!/usr/bin/env bash
+cat >/dev/null
 printf '%s %s %s %s capture=%s\n' "\$1" "\$2" "\$3" "\$4" "\${ADLC_CAPTURE:-}" >>"$RECORD"
+printf '%s\n' "\$2" >>"$STATE/captured"
 REC
   chmod +x "$T/recorder.sh"
   export ADLC_CAPTURE_CMD="$T/recorder.sh" ADLC_PROJECTS_DIR="$PROJ"
@@ -114,4 +116,22 @@ t_backfill_skips_unsafe_session_ids() {
   bf_session "$d" 'bad id' "$REPO" 2026-03-01T00:00:00Z
   bf_run
   assert_eq 0 "$(wc -l <"$RECORD" | tr -d ' ')"
+}
+
+t_backfill_counts_only_newly_captured() {
+  bf_setup
+  local d
+  d=$(bf_slug "$REPO")
+  bf_session "$d" aaaa-0001 "$REPO" 2026-03-01T00:00:00Z
+  bf_session "$d" bbbb-0002 "$REPO" 2026-03-02T00:00:00Z
+  cat >"$T/noop.sh" <<NOOP
+#!/usr/bin/env bash
+printf '%s\n' "\$2" >>"$RECORD"
+if [ "\$2" != aaaa-0001 ]; then printf '%s\n' "\$2" >>"$STATE/captured"; fi
+exit 0
+NOOP
+  chmod +x "$T/noop.sh"
+  ADLC_CAPTURE_CMD="$T/noop.sh" bf_run --limit 1
+  assert_eq 2 "$(wc -l <"$RECORD" | tr -d ' ')"
+  assert_eq "captured 1, skipped 1" "$(cat "$T/stdout")"
 }

@@ -116,7 +116,7 @@ rc=0
       --permission-mode dontAsk \
       --allowedTools "Read" "Grep" "Glob" "Edit(/${state}/work/**)" \
       "Bash(git log:*)" "Bash(git show:*)" "Bash(gh pr view:*)" "Bash(gh pr list:*)" \
-      -- "$prompt"
+      -- "$prompt" </dev/null
 ) || rc=$?
 
 if [ "$rc" -ne 0 ]; then

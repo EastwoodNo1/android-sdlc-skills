@@ -66,12 +66,6 @@ for dir in "$projects"/"$slug"*/; do
   for file in "$dir"*.jsonl; do
     [ -f "$file" ] || continue
     id=$(basename "$file" .jsonl)
-    meta=$(jq -Rr 'fromjson? | objects | [(.cwd? // "" | strings), (.timestamp? // "" | strings)] | @tsv' <"$file" 2>/dev/null)
-    scwd=$(printf '%s\n' "$meta" | awk -F'\t' '$1 != "" {print $1; exit}')
-    case "$scwd" in
-      "$main" | "$main"/* | "$main"-*) ;;
-      *) continue ;;
-    esac
     case "$id" in
       '' | *[!A-Za-z0-9-]*)
         skipped=$((skipped + 1))
@@ -84,6 +78,12 @@ for dir in "$projects"/"$slug"*/; do
       skipped=$((skipped + 1))
       continue
     fi
+    meta=$(head -n 50 "$file" | jq -Rr 'fromjson? | objects | [(.cwd? // "" | strings), (.timestamp? // "" | strings)] | @tsv' 2>/dev/null)
+    scwd=$(printf '%s\n' "$meta" | awk -F'\t' '$1 != "" {print $1; exit}')
+    case "$scwd" in
+      "$main" | "$main"/* | "$main"-*) ;;
+      *) continue ;;
+    esac
     count=$(adlc_human_prompt_count "$harness" "$file" 2>/dev/null) || count=0
     if ! [ "${count:-0}" -ge 3 ] 2>/dev/null; then
       skipped=$((skipped + 1))
@@ -101,7 +101,8 @@ while IFS="$(printf '\t')" read -r _ file; do
     break
   fi
   id=$(basename "$file" .jsonl)
-  if ADLC_CAPTURE=1 "$capture_cmd" "$harness" "$id" "$file" "$main"; then
+  ADLC_CAPTURE=1 "$capture_cmd" "$harness" "$id" "$file" "$main" </dev/null || true
+  if [ -f "$state/captured" ] && grep -qxF -- "$id" "$state/captured"; then
     captured=$((captured + 1))
   else
     skipped=$((skipped + 1))
