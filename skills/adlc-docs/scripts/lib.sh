@@ -71,8 +71,12 @@ adlc_human_prompt_count() {
 
 ADLC_AWK_STRUCT='
 BEGIN {
-  split("REQ AC DEC DES IMP TEST PROMPT CYCLE", names, " ")
-  for (k in names) keep[names[k]] = 1
+  if (keysfile != "") {
+    while ((getline k < keysfile) > 0) {
+      if (k ~ /^[A-Z][A-Z0-9]*$/ && length(k) >= 2 && length(k) <= 10) keys[k] = 1
+    }
+    close(keysfile)
+  }
   inkey = 0
 }
 {
@@ -98,8 +102,7 @@ BEGIN {
     prev = (s > 1) ? substr(rest, s - 1, 1) : last
     nxt = substr(rest, s + l, 1)
     pfx = substr(tok, 1, index(tok, "-") - 1)
-    plen = length(pfx)
-    if (prev !~ /[A-Za-z0-9_]/ && nxt !~ /[A-Za-z0-9_]/ && plen >= 2 && plen <= 10 && !(pfx in keep)) {
+    if (prev !~ /[A-Za-z0-9_]/ && nxt !~ /[A-Za-z0-9_]/ && (pfx in keys)) {
       out = out substr(rest, 1, s - 1) "[redacted]"
       hit = 1
     } else {
@@ -168,7 +171,7 @@ adlc_scan_file() {
   done <<EOF2
 $(adlc_patterns)
 EOF2
-  LC_ALL=C awk -v mode=scan "$ADLC_AWK_STRUCT" "$file"
+  LC_ALL=C awk -v mode=scan -v keysfile="$state/issue-keys" "$ADLC_AWK_STRUCT" "$file"
   if [ -s "$state/deny-list" ]; then
     LC_ALL=C awk -v mode=scan "$ADLC_AWK_DENY" "$state/deny-list" "$file"
   fi
@@ -194,7 +197,7 @@ EOF2
     rm -f "$tmp" "$tmp2"
     return 1
   }
-  LC_ALL=C awk -v mode=redact "$ADLC_AWK_STRUCT" "$tmp" >"$tmp2" || {
+  LC_ALL=C awk -v mode=redact -v keysfile="$state/issue-keys" "$ADLC_AWK_STRUCT" "$tmp" >"$tmp2" || {
     rm -f "$tmp" "$tmp2"
     return 1
   }

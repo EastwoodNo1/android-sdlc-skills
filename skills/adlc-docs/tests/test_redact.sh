@@ -83,35 +83,45 @@ end" "$(cat "$RD_FILE")"
   assert_contains "$(cat "$RD_STATE/log/redactions.log")" "private-key"
 }
 
-t_redact_jira_key() {
-  rd_check jira-key "PROJ-123" "PROJ-123"
+rd_keys() {
+  rd_setup
+  printf 'ABC\nbad\nTOOLONGKEYXX\n\n' >"$RD_STATE/issue-keys"
 }
 
-t_redact_jira_key_inside_sentence_and_twice() {
-  rd_setup
-  printf 'see ABC-1, and XY2-77.\n' >"$RD_FILE"
+t_redact_issue_key() {
+  rd_keys
+  printf 'before ABC-123 after\n' >"$RD_FILE"
+  adlc_redact "$RD_FILE" "$RD_STATE"
+  assert_eq "before [redacted] after" "$(cat "$RD_FILE")"
+  assert_contains "$(cat "$RD_STATE/log/redactions.log")" "jira-key"
+  assert_not_contains "$RD_STATE/log/redactions.log" "ABC-123"
+}
+
+t_redact_issue_key_inside_sentence_and_twice() {
+  rd_keys
+  printf 'see ABC-1, and ABC-77.\n' >"$RD_FILE"
   adlc_redact "$RD_FILE" "$RD_STATE"
   assert_eq "see [redacted], and [redacted]." "$(cat "$RD_FILE")"
 }
 
-t_redact_keeps_documentation_ids() {
-  rd_setup
-  printf 'REQ-001 AC-2 DEC-013 DES-4 IMP-5 TEST-6 PROMPT-007 CYCLE-001\n' >"$RD_FILE"
+t_redact_leaves_engineering_ids_alone() {
+  rd_keys
+  printf 'ADR-0006 SHA-256 UTF-8 ISO-8601 REQ-001 CVE-2026-1 xABC-12 ABC-12x abc-12\n' >"$RD_FILE"
   adlc_redact "$RD_FILE" "$RD_STATE"
-  assert_eq "REQ-001 AC-2 DEC-013 DES-4 IMP-5 TEST-6 PROMPT-007 CYCLE-001" "$(cat "$RD_FILE")"
-  [ ! -s "$RD_STATE/log/redactions.log" ] || fail "unexpected log: $(cat "$RD_STATE/log/redactions.log")"
+  assert_eq "ADR-0006 SHA-256 UTF-8 ISO-8601 REQ-001 CVE-2026-1 xABC-12 ABC-12x abc-12" "$(cat "$RD_FILE")"
+  [ ! -s "$RD_STATE/log/redactions.log" ] || fail "unexpected log"
 }
 
-t_redact_keeps_lowercase_and_mid_word_keys() {
+t_redact_no_issue_keys_file_does_nothing() {
   rd_setup
-  printf 'abc-12 xABC-12 ABC-12x\n' >"$RD_FILE"
+  printf 'ABC-123 PROJ-9\n' >"$RD_FILE"
   adlc_redact "$RD_FILE" "$RD_STATE"
-  assert_eq "abc-12 xABC-12 ABC-12x" "$(cat "$RD_FILE")"
+  assert_eq "ABC-123 PROJ-9" "$(cat "$RD_FILE")"
 }
 
 t_redact_logs_one_line_per_class() {
-  rd_setup
-  printf 'a@b.example and c@d.example\nPROJ-1\n' >"$RD_FILE"
+  rd_keys
+  printf 'a@b.example and c@d.example\nABC-1\n' >"$RD_FILE"
   adlc_redact "$RD_FILE" "$RD_STATE"
   assert_eq 2 "$(wc -l <"$RD_STATE/log/redactions.log" | tr -d ' ')"
   assert_contains "$(cat "$RD_STATE/log/redactions.log")" "email"

@@ -218,8 +218,10 @@ t_capture_rejects_invalid_session_id() {
 
 t_capture_redacts_secret_and_logs_class() {
   cap_setup
+  printf 'PROJ\n' >"$STATE/issue-keys"
   ADLC_STUB_SECRET=1 cap_run
   assert_not_contains "$NOTE" "PROJ-42"
+  assert_contains "$(cat "$NOTE")" "REQ-001"
   assert_contains "$(cat "$STATE/log/redactions.log")" "jira-key"
   assert_contains "$(cat "$STATE/log/redactions.log")" "email"
 }

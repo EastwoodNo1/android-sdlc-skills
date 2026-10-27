@@ -84,7 +84,7 @@ Apply these in capture and again in fold-in. The repository is public.
 - Rewrite absolute home paths to `~/` or a repo-relative path.
 - Quote a prompt verbatim only when it is about the project and contains nothing above. Otherwise paraphrase it and label it `Reconstructed prompt intent - not verbatim`.
 - Never quote tool output that could contain environment data.
-- A mechanical redaction runs after capture and replaces emails, `/Users/` and `/home/` paths, secret-shaped tokens, PEM private keys, Jira-style keys (except `REQ`, `AC`, `DEC`, `DES`, `IMP`, `TEST`, `PROMPT` and `CYCLE` IDs) and deny-list terms. Do not rely on it. At fold-in, the main agent also runs `scan.sh` on `docs/adlc` before the commit.
+- A mechanical redaction runs after capture and replaces emails, `/Users/` and `/home/` paths, secret-shaped tokens, PEM private keys, issue keys of the projects the owner lists in `issue-keys`, and deny-list terms. Remove other internal issue keys yourself. Do not rely on it. At fold-in, the main agent also runs `scan.sh` on `docs/adlc` before the commit.
 
 ## Core responsibilities
 

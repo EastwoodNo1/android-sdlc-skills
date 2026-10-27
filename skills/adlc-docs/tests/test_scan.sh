@@ -17,10 +17,11 @@ t_scan_clean_dir_exits_0() {
 t_scan_dirty_dir_exits_1_with_classes() {
   local s rc=0
   s="ghp_$(rep a 24)"
-  mkdir -p "$T/d/sub"
+  mkdir -p "$T/d/sub" "$T/state"
+  printf 'ABC\n' >"$T/state/issue-keys"
   printf 'ok\nmail x@y.example\n' >"$T/d/a.md"
-  printf 'token %s\nTrack PROJ-9\npath /Users/zed/x\n' "$s" >"$T/d/sub/b.md"
-  sc_run "$T/d" || rc=$?
+  printf 'token %s\nTrack ABC-9\npath /Users/zed/x\n' "$s" >"$T/d/sub/b.md"
+  sc_run "$T/d" "$T/state" || rc=$?
   assert_status 1 "$rc"
   assert_contains "$(cat "$T/scan.out")" "$T/d/a.md:2: email"
   assert_contains "$(cat "$T/scan.out")" "$T/d/sub/b.md:1: github-token"
@@ -28,7 +29,7 @@ t_scan_dirty_dir_exits_1_with_classes() {
   assert_contains "$(cat "$T/scan.out")" "$T/d/sub/b.md:3: home-path"
   assert_not_contains "$T/scan.out" "$s"
   assert_not_contains "$T/scan.out" "x@y.example"
-  assert_not_contains "$T/scan.out" "PROJ-9"
+  assert_not_contains "$T/scan.out" "ABC-9"
   assert_not_contains "$T/scan.out" "zed"
 }
 
@@ -70,4 +71,20 @@ t_scan_usage_errors() {
   rc=0
   sc_run "$T/nope" || rc=$?
   assert_status 2 "$rc"
+}
+
+t_scan_issue_keys_only_flag_listed_keys() {
+  local rc=0
+  mkdir -p "$T/d" "$T/state"
+  printf 'ABC\n' >"$T/state/issue-keys"
+  printf 'ADR-0006 SHA-256 UTF-8 REQ-001\n' >"$T/d/a.md"
+  sc_run "$T/d" "$T/state"
+  printf 'ABC-123\n' >"$T/d/b.md"
+  sc_run "$T/d" "$T/state" || rc=$?
+  assert_status 1 "$rc"
+  assert_contains "$(cat "$T/scan.out")" "b.md:1: jira-key"
+  assert_not_contains "$T/scan.out" "a.md"
+  rc=0
+  sc_run "$T/d" || rc=$?
+  assert_status 0 "$rc"
 }
