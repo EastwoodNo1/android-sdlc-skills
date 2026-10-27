@@ -72,7 +72,7 @@ adlc_human_prompt_count() {
 adlc_redact() {
   local file=$1 state=$2 tmp
   tmp=$(mktemp "${file}.XXXXXX") || return 1
-  sed -E \
+  LC_ALL=C sed -E \
     -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[redacted]/g' \
     -e 's#/Users/[^/ ]+#[redacted]#g' \
     -e 's#/home/[^/ ]+#[redacted]#g' \
@@ -86,7 +86,7 @@ adlc_redact() {
       rm -f "$tmp"
       return 1
     }
-    awk '
+    LC_ALL=C awk '
       FNR == NR {
         if (length($0) > 0) terms[++n] = tolower($0)
         next

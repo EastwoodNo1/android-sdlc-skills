@@ -97,7 +97,7 @@ t_capture_passes_model_and_loop_guard() {
   cap_run
   assert_contains "$(cat "$ADLC_STUB_LOG")" "--model sonnet"
   assert_contains "$(cat "$ADLC_STUB_LOG")" "disableAllHooks"
-  assert_contains "$(cat "$ADLC_STUB_LOG")" "Edit(/${STATE}/staged/**)"
+  assert_contains "$(cat "$ADLC_STUB_LOG")" "Edit(/${STATE}/work/**)"
   assert_not_contains "$ADLC_STUB_LOG" "Write("
 }
 
@@ -122,4 +122,39 @@ t_capture_prunes_logs_beyond_50() {
   assert_eq 50 "$(find "$STATE/log" -name '*.log' | wc -l | tr -d ' ')"
   [ -e "$STATE/log/$CAP_SID.log" ]
   [ ! -e "$STATE/log/old1.log" ]
+}
+
+t_capture_fail_after_write_leaves_nothing_staged() {
+  cap_setup
+  rc=0
+  ADLC_STUB_FAIL_AFTER_WRITE=1 cap_run || rc=$?
+  assert_status 1 "$rc"
+  assert_eq 0 "$(find "$STATE/staged" -type f | wc -l | tr -d ' ')"
+  assert_eq 0 "$(find "$STATE/work" -type f | wc -l | tr -d ' ')"
+}
+
+t_capture_non_utf8_note_is_redacted() {
+  cap_setup
+  ADLC_STUB_BAD_BYTE=1 LC_ALL=en_US.UTF-8 cap_run
+  [ -s "$NOTE" ]
+  assert_not_contains "$NOTE" "someone@"
+  assert_contains "$(cat "$NOTE")" "[redacted]"
+}
+
+t_capture_success_leaves_only_one_staged_file() {
+  cap_setup
+  cap_run
+  assert_eq 1 "$(find "$STATE/staged" -type f | wc -l | tr -d ' ')"
+  assert_eq 0 "$(find "$STATE/work" -type f | wc -l | tr -d ' ')"
+}
+
+t_capture_redaction_failure_leaves_nothing_staged() {
+  cap_setup
+  printf 'term\n' >"$STATE/deny-list"
+  chmod 000 "$STATE/deny-list"
+  rc=0
+  cap_run || rc=$?
+  assert_status 1 "$rc"
+  assert_eq 0 "$(find "$STATE/staged" -type f | wc -l | tr -d ' ')"
+  assert_eq 0 "$(find "$STATE/work" -type f | wc -l | tr -d ' ')"
 }

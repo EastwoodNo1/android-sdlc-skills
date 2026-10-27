@@ -41,7 +41,7 @@ top=$(adlc_toplevel "$cwd") || {
   exit 1
 }
 
-mkdir -p "$state/staged" "$state/digests" "$state/log" || exit 1
+mkdir -p "$state/staged" "$state/work" "$state/digests" "$state/log" || exit 1
 lock="$state/lock"
 
 if [ -d "$lock" ] && [ -n "$(find "$lock" -maxdepth 0 -mmin +30 2>/dev/null)" ]; then
@@ -52,7 +52,12 @@ if ! mkdir "$lock" 2>/dev/null; then
   say "busy: another capture holds the lock"
   exit 0
 fi
-trap 'rmdir "$lock" 2>/dev/null' EXIT
+work="$state/work/$session_id.md"
+cleanup() {
+  rm -f "$work" "$work".* 2>/dev/null
+  rmdir "$lock" 2>/dev/null
+}
+trap cleanup EXIT
 
 if [ -f "$state/captured" ] && grep -qxF -- "$session_id" "$state/captured"; then
   say "already captured $session_id"
@@ -90,7 +95,7 @@ bash "$here/digest.sh" --format claude "$transcript" "$digest" || {
 
 prompt="MODE: capture
 DIGEST: $digest
-NOTE: $note
+NOTE: $work
 REPO: $top
 SESSION: $session_id
 HARNESS: $harness"
@@ -101,7 +106,7 @@ if [ -n "${ADLC_PLUGIN_DIR:-}" ]; then
   plugin_args=(--plugin-dir "$ADLC_PLUGIN_DIR")
 fi
 
-rm -f "$note"
+rm -f "$work"
 rc=0
 (
   cd "$top" &&
@@ -109,7 +114,7 @@ rc=0
       ${plugin_args[@]+"${plugin_args[@]}"} \
       --settings '{"disableAllHooks":true}' --no-session-persistence \
       --permission-mode dontAsk \
-      --allowedTools "Read" "Grep" "Glob" "Edit(/${state}/staged/**)" \
+      --allowedTools "Read" "Grep" "Glob" "Edit(/${state}/work/**)" \
       "Bash(git log:*)" "Bash(git show:*)" "Bash(gh pr view:*)" "Bash(gh pr list:*)" \
       -- "$prompt"
 ) || rc=$?
@@ -119,14 +124,19 @@ if [ "$rc" -ne 0 ]; then
   prune_logs
   exit 1
 fi
-if [ ! -s "$note" ]; then
-  say "note missing or empty: $note"
+if [ ! -s "$work" ]; then
+  say "note missing or empty: $work"
   prune_logs
   exit 1
 fi
 
-adlc_redact "$note" "$state" || {
+adlc_redact "$work" "$state" || {
   say "redaction failed"
+  prune_logs
+  exit 1
+}
+mv "$work" "$note" || {
+  say "could not move note into staged"
   prune_logs
   exit 1
 }
