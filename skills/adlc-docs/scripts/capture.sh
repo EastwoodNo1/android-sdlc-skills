@@ -17,6 +17,12 @@ if [ -z "$harness" ] || [ -z "$session_id" ] || [ -z "$transcript" ] || [ -z "$c
   say "usage: capture.sh <harness> <session_id> <transcript_path> <cwd>"
   exit 1
 fi
+case "$session_id" in
+  *[!A-Za-z0-9-]*)
+    say "invalid session id"
+    exit 1
+    ;;
+esac
 [ "$harness" = "claude" ] || {
   say "unsupported harness $harness"
   exit 1
@@ -41,7 +47,7 @@ top=$(adlc_toplevel "$cwd") || {
   exit 1
 }
 
-mkdir -p "$state/staged" "$state/work" "$state/digests" "$state/log" || exit 1
+mkdir -p "$state/staged" "$state/digests" "$state/log" || exit 1
 lock="$state/lock"
 
 if [ -d "$lock" ] && [ -n "$(find "$lock" -maxdepth 0 -mmin +30 2>/dev/null)" ]; then
@@ -52,12 +58,18 @@ if ! mkdir "$lock" 2>/dev/null; then
   say "busy: another capture holds the lock"
   exit 0
 fi
-work="$state/work/$session_id.md"
+workdir=
 cleanup() {
-  rm -f "$work" "$work".* 2>/dev/null
+  [ -n "$workdir" ] && rm -rf "$workdir" 2>/dev/null
   rmdir "$lock" 2>/dev/null
 }
 trap cleanup EXIT
+workdir=$(mktemp -d "${TMPDIR:-/tmp}/adlc-work.XXXXXX") || {
+  say "could not create work directory"
+  exit 1
+}
+workdir=$(cd "$workdir" && pwd -P) || exit 1
+work="$workdir/$session_id.md"
 
 if [ -f "$state/captured" ] && grep -qxF -- "$session_id" "$state/captured"; then
   say "already captured $session_id"
@@ -114,7 +126,7 @@ rc=0
       ${plugin_args[@]+"${plugin_args[@]}"} \
       --settings '{"disableAllHooks":true}' --no-session-persistence \
       --permission-mode dontAsk \
-      --allowedTools "Read" "Grep" "Glob" "Edit(/${state}/work/**)" \
+      --allowedTools "Read" "Grep" "Glob" "Edit(/${workdir}/**)" \
       "Bash(git log:*)" "Bash(git show:*)" "Bash(gh pr view:*)" "Bash(gh pr list:*)" \
       -- "$prompt" </dev/null
 ) || rc=$?

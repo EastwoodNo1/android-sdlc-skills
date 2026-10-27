@@ -164,3 +164,11 @@ t_session_end_returns_under_1s() {
   end=$(date +%s)
   assert_le 1 $((end - start)) "elapsed seconds"
 }
+
+t_session_end_invalid_session_id_starts_nothing() {
+  se_setup
+  se_opt_in
+  printf '{"session_id":"../evil","transcript_path":"%s","cwd":"%s"}' "$SE_TRANSCRIPT" "$REPO" |
+    bash "$SCRIPTS_DIR/session-end.sh" claude >"$T/stdout" 2>"$T/stderr"
+  se_assert_nothing_started
+}

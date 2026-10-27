@@ -20,7 +20,7 @@ The first line of the prompt is `MODE: capture` or `MODE: fold-in`. Do exactly w
 The prompt continues with:
 
 - `DIGEST: <path>`: a Markdown digest of one session
-- `NOTE: <path>`: where to write the staged note
+- `NOTE: <path>`: a private work path outside the repository to write the note to; the capture script redacts it and moves it into `staged/`
 - `REPO: <path>`: the repository, for read-only evidence from git and pull requests
 - `SESSION: <id>`
 - `HARNESS: <name>`

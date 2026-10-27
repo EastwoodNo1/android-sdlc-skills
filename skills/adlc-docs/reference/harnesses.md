@@ -16,14 +16,25 @@ An adapter supplies three parts:
 
 Only `claude` is implemented. For `codex` and `copilot`, `session-end.sh` exits 0 with the stderr note "adapter not implemented".
 
-The staging folder holds `staged/`, `digests/`, `log/`, `captured`, `lock`, and the owner's `enabled`, `disabled` and `deny-list` files, all under `<git-common-dir>/adlc/`.
+The staging folder holds `staged/`, `digests/`, `log/`, `captured`, `lock`, and the owner's `enabled`, `disabled` and `deny-list` files, all under `<git-common-dir>/adlc/`. The agent writes its raw note to a private temporary directory outside `.git`, because Claude Code refuses writes inside `.git`; `capture.sh` redacts it and moves it to `staged/`.
 
 ## Claude Code (implemented)
 
 - Trigger: plugin `hooks/hooks.json` with a top-level `"hooks"` wrapper, `SessionEnd` and `SessionStart`.
 - `SessionEnd` stdin: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `reason`. The hook cannot block and has a 1.5 s budget, so capture runs as a fully detached process.
 - Transcripts: `~/.claude/projects/<slug>/<session>.jsonl`, deleted after `cleanupPeriodDays` (default 30). Subagent transcripts: `<session>/subagents/agent-*.jsonl`.
-- Headless: `claude -p --agent android-sdlc:adlc-documenter --model sonnet --permission-mode dontAsk --allowedTools ... --settings '{"disableAllHooks":true}' --no-session-persistence`.
+- Headless, run from the repository top level with `ADLC_CAPTURE=1` set:
+
+```sh
+claude -p --agent android-sdlc:adlc-documenter --model sonnet \
+  --settings '{"disableAllHooks":true}' --no-session-persistence \
+  --permission-mode dontAsk \
+  --allowedTools "Read" "Grep" "Glob" "Edit(/<workdir>/**)" \
+  "Bash(git log:*)" "Bash(git show:*)" "Bash(gh pr view:*)" "Bash(gh pr list:*)" \
+  -- "<prompt>"
+```
+
+  `<workdir>` is a fresh `mktemp -d` directory outside `.git`, resolved with `pwd -P`. Claude Code refuses writes inside `.git`, so the agent writes only `<workdir>/<session_id>.md`; `capture.sh` redacts it, moves it to `staged/` and deletes the directory.
 - Instructions file: `CLAUDE.md`.
 - Source: https://code.claude.com/docs/en/hooks
 

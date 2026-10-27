@@ -8,6 +8,8 @@ cap_setup() {
   new_repo "$REPO"
   . "$SCRIPTS_DIR/lib.sh"
   STATE=$(adlc_state_dir "$REPO")
+  mkdir -p "$T/tmp"
+  export TMPDIR="$T/tmp"
   mkdir -p "$STATE"
   export ADLC_CLAUDE_BIN="$TESTS_DIR/stub/claude"
   export ADLC_STUB_LOG="$T/stub.log"
@@ -97,7 +99,7 @@ t_capture_passes_model_and_loop_guard() {
   cap_run
   assert_contains "$(cat "$ADLC_STUB_LOG")" "--model sonnet"
   assert_contains "$(cat "$ADLC_STUB_LOG")" "disableAllHooks"
-  assert_contains "$(cat "$ADLC_STUB_LOG")" "Edit(/${STATE}/work/**)"
+  assert_contains "$(cat "$ADLC_STUB_LOG")" "Edit(//"
   assert_not_contains "$ADLC_STUB_LOG" "Write("
 }
 
@@ -130,7 +132,7 @@ t_capture_fail_after_write_leaves_nothing_staged() {
   ADLC_STUB_FAIL_AFTER_WRITE=1 cap_run || rc=$?
   assert_status 1 "$rc"
   assert_eq 0 "$(find "$STATE/staged" -type f | wc -l | tr -d ' ')"
-  assert_eq 0 "$(find "$STATE/work" -type f | wc -l | tr -d ' ')"
+  assert_eq 0 "$(find "$T/tmp" -type f | wc -l | tr -d ' ')"
 }
 
 t_capture_non_utf8_note_is_redacted() {
@@ -145,7 +147,7 @@ t_capture_success_leaves_only_one_staged_file() {
   cap_setup
   cap_run
   assert_eq 1 "$(find "$STATE/staged" -type f | wc -l | tr -d ' ')"
-  assert_eq 0 "$(find "$STATE/work" -type f | wc -l | tr -d ' ')"
+  assert_eq 0 "$(find "$T/tmp" -type f | wc -l | tr -d ' ')"
 }
 
 t_capture_redaction_failure_leaves_nothing_staged() {
@@ -156,5 +158,14 @@ t_capture_redaction_failure_leaves_nothing_staged() {
   cap_run || rc=$?
   assert_status 1 "$rc"
   assert_eq 0 "$(find "$STATE/staged" -type f | wc -l | tr -d ' ')"
-  assert_eq 0 "$(find "$STATE/work" -type f | wc -l | tr -d ' ')"
+  assert_eq 0 "$(find "$T/tmp" -type f | wc -l | tr -d ' ')"
+}
+
+t_capture_rejects_invalid_session_id() {
+  cap_setup
+  local rc=0
+  bash "$SCRIPTS_DIR/capture.sh" claude "../evil" "$CAP_TRANSCRIPT" "$REPO" >"$T/out" 2>&1 || rc=$?
+  [ "$rc" -eq 1 ]
+  assert_contains "$(cat "$T/out")" "invalid session id"
+  [ ! -e "$STATE/evil.md" ]
 }

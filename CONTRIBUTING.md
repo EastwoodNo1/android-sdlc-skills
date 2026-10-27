@@ -9,7 +9,7 @@ This repo follows the SuperSnake workflow where it applies to a repo that is not
 5. Open a PR. The title is a Conventional header of at most 64 characters. The body has `Closes #<issue>` and an `## Evidence` section with real command output or a CI link.
 6. Squash merge only, once the required check `verify` is green and the branch is up to date with `main`.
 
-Templates are copies. Change a file in SuperSnake first, then copy it here and run `scripts/verify-templates.sh <SuperSnake checkout>`: it must print `0 drift`.
+Templates are copies. Change a file in SuperSnake first, then copy it here and run `scripts/verify-templates.sh <SuperSnake checkout>`: it must print `0 drift`. The exception is the ADLC templates under `skills/adlc-docs/templates/`: they originate here, not in SuperSnake, and are not drift-checked.
 
 Local checks: `scripts/verify-templates.sh ../SuperSnake`, `shellcheck`, `zizmor .github/`, and in `skills/android-ci/templates`: `cp ../reference/libs.versions.toml gradle/libs.versions.toml` (git-ignored) then `mise exec -- ../../../gradlew -p build-logic/checks test koverVerify`.
 

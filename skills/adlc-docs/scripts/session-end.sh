@@ -21,6 +21,9 @@ session_id=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null)
 transcript=$(printf '%s' "$input" | jq -r '.transcript_path // empty' 2>/dev/null)
 cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null)
 [ -n "$session_id" ] && [ -n "$transcript" ] && [ -n "$cwd" ] || exit 0
+case "$session_id" in
+  *[!A-Za-z0-9-]*) exit 0 ;;
+esac
 
 state=$(adlc_state_dir "$cwd") || exit 0
 adlc_opted_in "$cwd" || exit 0
