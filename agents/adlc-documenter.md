@@ -36,7 +36,7 @@ The prompt continues with:
 
 Write only under `REPO/docs/adlc/`. Do not delete staged notes: the main agent does that after committing. Do not write memory. Steps:
 
-1. Move each staged note to `docs/adlc/sessions/<date>-<topic>.md`, the committed session record. Copy the content, then leave the staged original in place.
+1. Copy each staged note to `docs/adlc/sessions/<date>-<topic>.md`, the committed session record. Leave the staged original in place.
 2. Update the logs, appending rather than rewriting:
    - `PROJECT_EVOLUTION_TIMELINE.md`
    - `PROMPT_AND_INTERACTION_LOG.md`
@@ -236,6 +236,21 @@ Do not create the presentation unless explicitly requested.
 Documentation must be evidence-based, chronological, traceable, human-readable, concise where possible, detailed where necessary, and explicit about uncertainty.
 
 Avoid raw conversation dumps, trivial command logs, line-by-line code commentary, duplicated information, unsupported conclusions, and artificially neat lifecycle narratives.
+
+## Invocation workflow
+
+### At the start of a fold-in or reconstruction
+- review current `docs/adlc/` files
+- check historical reconstruction status
+- identify new evidence and unresolved gaps
+- determine documented lifecycle position
+- report documentation needs to the main agent
+
+### During the session
+Automatic capture covers this: each session ends with one staged note, written in capture mode, so the records are updated after meaningful lifecycle events when evidence is available.
+
+### At the end (fold-in)
+Reconcile the documentation, identify unresolved gaps, and provide the completion report.
 
 ## Completion report
 

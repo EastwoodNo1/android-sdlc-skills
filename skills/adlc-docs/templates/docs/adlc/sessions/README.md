@@ -2,7 +2,7 @@
 
 One file per working session, named `<YYYY-MM-DD>-<topic>.md`.
 
-Each file is made by fold-in from a staged note that automatic capture wrote when the session ended. Fold-in moves the note here inside a pull request and allocates the stable IDs (`PROMPT-`, `DEC-`, `REQ-` and similar) in the logs. The session record itself carries no IDs.
+Each file is made by fold-in from a staged note that automatic capture wrote when the session ended. Fold-in copies the note here inside a pull request and allocates the stable IDs (`PROMPT-`, `DEC-`, `REQ-` and similar) in the logs. The session record itself carries no IDs.
 
 The front matter and sections are the staged note format:
 
