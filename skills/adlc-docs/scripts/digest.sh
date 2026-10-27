@@ -12,7 +12,9 @@ usage() {
   exit 2
 }
 
-[ "$#" -eq 4 ] && [ "$1" = "--format" ] || usage
+if [ "$#" -ne 4 ] || [ "$1" != "--format" ]; then
+  usage
+fi
 format=$2
 transcript=$3
 out=$4

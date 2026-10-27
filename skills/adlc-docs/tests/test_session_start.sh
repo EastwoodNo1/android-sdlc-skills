@@ -7,7 +7,7 @@ ss_setup() {
 
 ss_run() {
   printf '{"session_id":"%s","cwd":"%s"}' "$SID" "$REPO" |
-    bash "$SCRIPTS_DIR/session-start.sh" "${1:-claude}" >"$T/stdout" 2>"$T/stderr"
+    bash "$SCRIPTS_DIR/session-start.sh" claude >"$T/stdout" 2>"$T/stderr"
 }
 
 ss_wait_lines() {
