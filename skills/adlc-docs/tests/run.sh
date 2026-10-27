@@ -8,7 +8,9 @@ TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/adlc-tests.XXXXXX")
 trap 'rm -rf "$TMP_ROOT"' EXIT
 export TESTS_DIR SCRIPTS_DIR FIXTURES_DIR TMP_ROOT
 
-. "$TESTS_DIR/lib/assert.sh"
+for file in "$TESTS_DIR"/lib/*.sh; do
+  . "$file"
+done
 for file in "$TESTS_DIR"/test_*.sh; do
   . "$file"
 done

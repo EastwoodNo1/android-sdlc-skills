@@ -135,3 +135,69 @@ NOOP
   assert_eq 2 "$(wc -l <"$RECORD" | tr -d ' ')"
   assert_eq "captured 1, skipped 1" "$(cat "$T/stdout")"
 }
+
+t_backfill_skips_ids_failed_twice_but_retries_once_failed() {
+  bf_setup
+  local d
+  d=$(bf_slug "$REPO")
+  bf_session "$d" aaaa-0001 "$REPO" 2026-03-01T00:00:00Z
+  bf_session "$d" bbbb-0002 "$REPO" 2026-03-02T00:00:00Z
+  bf_session "$d" cccc-0003 "$REPO" 2026-03-03T00:00:00Z
+  printf 'aaaa-0001\naaaa-0001\nbbbb-0002\n' >"$STATE/failed"
+  bf_run
+  assert_eq 2 "$(wc -l <"$RECORD" | tr -d ' ')"
+  assert_contains "$(sed -n 1p "$RECORD")" "bbbb-0002"
+  assert_contains "$(sed -n 2p "$RECORD")" "cccc-0003"
+  assert_eq "captured 2, skipped 1" "$(cat "$T/stdout")"
+}
+
+t_backfill_retries_after_failed_lines_are_deleted() {
+  bf_setup
+  local d
+  d=$(bf_slug "$REPO")
+  bf_session "$d" aaaa-0001 "$REPO" 2026-03-01T00:00:00Z
+  printf 'aaaa-0001\naaaa-0001\n' >"$STATE/failed"
+  bf_run
+  assert_eq 0 "$(wc -l <"$RECORD" | tr -d ' ')"
+  : >"$STATE/failed"
+  bf_run
+  assert_eq 1 "$(wc -l <"$RECORD" | tr -d ' ')"
+}
+
+t_backfill_records_trivial_ids_and_skips_them_later() {
+  bf_setup
+  local d
+  d=$(bf_slug "$REPO")
+  bf_session "$d" aaaa-0001 "$REPO" 2026-03-01T00:00:00Z 2
+  bf_session "$d" bbbb-0002 "$REPO" 2026-03-02T00:00:00Z
+  bf_run
+  assert_eq "aaaa-0001" "$(cat "$STATE/trivial")"
+  assert_eq 1 "$(wc -l <"$RECORD" | tr -d ' ')"
+  assert_eq "captured 1, skipped 1" "$(cat "$T/stdout")"
+  bf_run
+  assert_eq "aaaa-0001" "$(cat "$STATE/trivial")"
+}
+
+t_backfill_trivial_check_precedes_transcript_parsing() {
+  bf_setup
+  local d
+  d=$(bf_slug "$REPO")
+  mkdir -p "$PROJ/$d"
+  printf 'not json at all\n' >"$PROJ/$d/aaaa-0001.jsonl"
+  touch -t 202001010000 "$PROJ/$d/aaaa-0001.jsonl"
+  printf 'aaaa-0001\n' >"$STATE/trivial"
+  bf_run
+  assert_eq "captured 0, skipped 1" "$(cat "$T/stdout")"
+  assert_eq "aaaa-0001" "$(cat "$STATE/trivial")"
+}
+
+t_backfill_flag_without_value_prints_usage_and_exits_2() {
+  bf_setup
+  local flag rc
+  for flag in --limit --exclude --project-dir --harness; do
+    rc=0
+    bf_run "$flag" || rc=$?
+    assert_status 2 "$rc" "$flag"
+    assert_contains "$(cat "$T/stderr")" "usage"
+  done
+}

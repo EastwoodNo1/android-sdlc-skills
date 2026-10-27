@@ -6,23 +6,32 @@ project_dir=$PWD
 limit=
 exclude=
 
+usage() {
+  printf 'usage: backfill.sh [--harness <name>] [--project-dir <dir>] [--limit <n>] [--exclude <session id>]\n' >&2
+  exit 2
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --harness)
-      harness=${2:-}
-      shift 2 || break
+      [ $# -ge 2 ] || usage
+      harness=$2
+      shift 2
       ;;
     --project-dir)
-      project_dir=${2:-}
-      shift 2 || break
+      [ $# -ge 2 ] || usage
+      project_dir=$2
+      shift 2
       ;;
     --limit)
-      limit=${2:-}
-      shift 2 || break
+      [ $# -ge 2 ] || usage
+      limit=$2
+      shift 2
       ;;
     --exclude)
-      exclude=${2:-}
-      shift 2 || break
+      [ $# -ge 2 ] || usage
+      exclude=$2
+      shift 2
       ;;
     *)
       printf 'adlc-docs backfill: unknown argument %s\n' "$1" >&2
@@ -74,6 +83,8 @@ for dir in "$projects"/"$slug"*/; do
     esac
     if [ "$id" = "$exclude" ] ||
       { [ -f "$state/captured" ] && grep -qxF -- "$id" "$state/captured"; } ||
+      { [ -f "$state/trivial" ] && grep -qxF -- "$id" "$state/trivial"; } ||
+      { [ -f "$state/failed" ] && [ "$(grep -cxF -- "$id" "$state/failed")" -ge 2 ]; } ||
       [ -n "$(find "$file" -maxdepth 0 -mmin -10 2>/dev/null)" ]; then
       skipped=$((skipped + 1))
       continue
@@ -84,8 +95,12 @@ for dir in "$projects"/"$slug"*/; do
       "$main" | "$main"/* | "$main"-*) ;;
       *) continue ;;
     esac
-    count=$(adlc_human_prompt_count "$harness" "$file" 2>/dev/null) || count=0
+    if ! count=$(adlc_human_prompt_count "$harness" "$file" 2>/dev/null); then
+      skipped=$((skipped + 1))
+      continue
+    fi
     if ! [ "${count:-0}" -ge 3 ] 2>/dev/null; then
+      printf '%s\n' "$id" >>"$state/trivial"
       skipped=$((skipped + 1))
       continue
     fi

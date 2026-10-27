@@ -124,10 +124,8 @@ t_session_end_opted_in_starts_capture() {
   se_opt_in
   se_run claude
   se_wait_record
-  top=$(cd "$REPO" && pwd -P)
   assert_contains "$(cat "$RECORD")" "args: [claude] [$SE_SID] [$SE_TRANSCRIPT] [$REPO]"
   assert_contains "$(cat "$RECORD")" "capture=1"
-  [ -n "$top" ]
 }
 
 t_session_end_writes_enabled_marker() {
@@ -171,4 +169,23 @@ t_session_end_invalid_session_id_starts_nothing() {
   printf '{"session_id":"../evil","transcript_path":"%s","cwd":"%s"}' "$SE_TRANSCRIPT" "$REPO" |
     bash "$SCRIPTS_DIR/session-end.sh" claude >"$T/stdout" 2>"$T/stderr"
   se_assert_nothing_started
+}
+
+t_session_end_adlc_disable_env_starts_nothing() {
+  se_setup
+  se_opt_in
+  ADLC_DISABLE=1 se_run claude
+  se_assert_nothing_started
+}
+
+t_session_end_without_jq_starts_nothing() {
+  se_setup
+  se_opt_in
+  local bash_bin
+  bash_bin=$(command -v bash)
+  mkdir -p "$T/emptybin"
+  printf '{"session_id":"%s","transcript_path":"%s","cwd":"%s"}' "$SE_SID" "$SE_TRANSCRIPT" "$REPO" |
+    env PATH="$T/emptybin" "$bash_bin" "$SCRIPTS_DIR/session-end.sh" claude >"$T/stdout" 2>"$T/stderr"
+  se_assert_nothing_started
+  assert_eq "" "$(cat "$T/stderr")"
 }

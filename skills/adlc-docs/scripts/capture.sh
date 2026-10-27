@@ -47,7 +47,7 @@ top=$(adlc_toplevel "$cwd") || {
   exit 1
 }
 
-mkdir -p "$state/staged" "$state/digests" "$state/log" || exit 1
+mkdir -p "$state/staged" "$state/log" || exit 1
 lock="$state/lock"
 
 if [ -d "$lock" ] && [ -n "$(find "$lock" -maxdepth 0 -mmin +30 2>/dev/null)" ]; then
@@ -76,6 +76,13 @@ if [ -f "$state/captured" ] && grep -qxF -- "$session_id" "$state/captured"; the
   exit 0
 fi
 
+fail_capture() {
+  say "$*"
+  printf '%s\n' "$session_id" >>"$state/failed"
+  prune_logs
+  exit 1
+}
+
 prune_logs() {
   local f g newer
   for f in "$state/log"/*.log; do
@@ -96,14 +103,10 @@ case "$day" in
   *) day=$(date +%Y-%m-%d) ;;
 esac
 
-digest="$state/digests/$session_id.md"
+digest="$workdir/digest.md"
 note="$state/staged/$day-$(printf '%s' "$session_id" | cut -c1-8).md"
 
-bash "$here/digest.sh" --format claude "$transcript" "$digest" || {
-  say "digest failed"
-  prune_logs
-  exit 1
-}
+bash "$here/digest.sh" --format claude "$transcript" "$digest" || fail_capture "digest failed"
 
 prompt="MODE: capture
 DIGEST: $digest
@@ -126,35 +129,17 @@ rc=0
       ${plugin_args[@]+"${plugin_args[@]}"} \
       --settings '{"disableAllHooks":true}' --no-session-persistence \
       --permission-mode dontAsk \
-      --allowedTools "Read" "Grep" "Glob" "Edit(/${workdir}/**)" \
-      "Bash(git log:*)" "Bash(git show:*)" "Bash(gh pr view:*)" "Bash(gh pr list:*)" \
+      --allowedTools "Read(/${workdir}/**)" "Read(/${top}/**)" "Edit(/${workdir}/**)" \
+      --disallowedTools "Read(/${top}/.git/**)" \
       -- "$prompt" </dev/null
 ) || rc=$?
 
-if [ "$rc" -ne 0 ]; then
-  say "runner failed with status $rc"
-  prune_logs
-  exit 1
-fi
-if [ ! -s "$work" ]; then
-  say "note missing or empty: $work"
-  prune_logs
-  exit 1
-fi
-
-adlc_redact "$work" "$state" || {
-  say "redaction failed"
-  prune_logs
-  exit 1
-}
-mv "$work" "$note" || {
-  say "could not move note into staged"
-  prune_logs
-  exit 1
-}
+[ "$rc" -eq 0 ] || fail_capture "runner failed with status $rc"
+[ -s "$work" ] || fail_capture "note missing or empty: $work"
+adlc_redact "$work" "$state" || fail_capture "redaction failed"
+mv "$work" "$note" || fail_capture "could not move note into staged"
 
 printf '%s\n' "$session_id" >>"$state/captured"
-rm -f "$digest"
 say "captured $session_id -> $note"
 prune_logs
 exit 0

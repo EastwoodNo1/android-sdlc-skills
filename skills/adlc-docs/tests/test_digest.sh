@@ -3,11 +3,6 @@
 SID=5e1f0c2a-0000-4000-8000-0000000000a1
 FIXTURE_TRANSCRIPT="$FIXTURES_DIR/claude/$SID.jsonl"
 
-new_repo() {
-  git init -q "$1"
-  git -C "$1" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q --allow-empty -m init
-}
-
 t_digest_matches_expected() {
   bash "$SCRIPTS_DIR/digest.sh" --format claude "$FIXTURE_TRANSCRIPT" "$T/out.md"
   assert_file_eq "$FIXTURES_DIR/claude/expected-digest.md" "$T/out.md"

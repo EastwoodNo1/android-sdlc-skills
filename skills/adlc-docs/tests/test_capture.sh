@@ -34,10 +34,12 @@ t_capture_records_captured_id() {
   grep -qxF "$CAP_SID" "$STATE/captured"
 }
 
-t_capture_removes_digest_on_success() {
+t_capture_keeps_digest_out_of_state_dir() {
   cap_setup
   cap_run
-  [ ! -e "$STATE/digests/$CAP_SID.md" ]
+  [ ! -e "$STATE/digests" ]
+  assert_contains "$(cat "$ADLC_STUB_LOG")" "DIGEST: $(cd "$T/tmp" && pwd -P)/adlc-work."
+  assert_eq 0 "$(find "$T/tmp" -mindepth 1 | wc -l | tr -d ' ')"
 }
 
 t_capture_redacts_email_and_home_path() {
@@ -56,15 +58,39 @@ t_capture_redacts_deny_list_term() {
   assert_contains "$(cat "$NOTE")" "# [redacted]"
 }
 
-t_capture_keeps_digest_on_runner_failure() {
+t_capture_runner_failure_records_failed_and_cleans_up() {
   cap_setup
   rc=0
   ADLC_STUB_FAIL=1 cap_run || rc=$?
   assert_status 1 "$rc"
-  [ -s "$STATE/digests/$CAP_SID.md" ]
+  [ ! -e "$STATE/digests" ]
+  assert_eq 0 "$(find "$T/tmp" -mindepth 1 | wc -l | tr -d ' ')"
+  assert_eq "$CAP_SID" "$(cat "$STATE/failed")"
   if [ -f "$STATE/captured" ]; then
     assert_not_contains "$STATE/captured" "$CAP_SID"
   fi
+}
+
+t_capture_each_failure_appends_one_line() {
+  cap_setup
+  rc=0
+  ADLC_STUB_FAIL=1 cap_run || rc=$?
+  ADLC_STUB_FAIL=1 cap_run || rc=$?
+  assert_eq 2 "$(grep -cxF "$CAP_SID" "$STATE/failed")"
+}
+
+t_capture_success_does_not_record_failed() {
+  cap_setup
+  cap_run
+  [ ! -e "$STATE/failed" ]
+}
+
+t_capture_note_missing_records_failed() {
+  cap_setup
+  rc=0
+  ADLC_STUB_NO_WRITE=1 cap_run || rc=$?
+  assert_status 1 "$rc"
+  assert_eq 1 "$(grep -cxF "$CAP_SID" "$STATE/failed")"
 }
 
 t_capture_respects_lock() {
@@ -103,6 +129,22 @@ t_capture_passes_model_and_loop_guard() {
   assert_not_contains "$ADLC_STUB_LOG" "Write("
 }
 
+t_capture_permissions_are_path_scoped() {
+  cap_setup
+  cap_run
+  local top args
+  top=$(cd "$REPO" && pwd -P)
+  args=$(cat "$ADLC_STUB_LOG")
+  assert_contains "$args" "Read(/$top/**)"
+  assert_contains "$args" "Read(/$(cd "$T/tmp" && pwd -P)/adlc-work."
+  assert_contains "$args" "Edit(/$(cd "$T/tmp" && pwd -P)/adlc-work."
+  assert_contains "$args" "--disallowedTools Read(/$top/.git/**)"
+  assert_not_contains "$ADLC_STUB_LOG" "Bash("
+  assert_not_contains "$ADLC_STUB_LOG" "Grep"
+  assert_not_contains "$ADLC_STUB_LOG" "Glob"
+  assert_not_contains "$ADLC_STUB_LOG" "allowedTools Read "
+}
+
 t_capture_rejects_unknown_runner_mode() {
   cap_setup
   rc=0
@@ -132,7 +174,7 @@ t_capture_fail_after_write_leaves_nothing_staged() {
   ADLC_STUB_FAIL_AFTER_WRITE=1 cap_run || rc=$?
   assert_status 1 "$rc"
   assert_eq 0 "$(find "$STATE/staged" -type f | wc -l | tr -d ' ')"
-  assert_eq 0 "$(find "$T/tmp" -type f | wc -l | tr -d ' ')"
+  assert_eq 0 "$(find "$T/tmp" -mindepth 1 | wc -l | tr -d ' ')"
 }
 
 t_capture_non_utf8_note_is_redacted() {
@@ -147,7 +189,7 @@ t_capture_success_leaves_only_one_staged_file() {
   cap_setup
   cap_run
   assert_eq 1 "$(find "$STATE/staged" -type f | wc -l | tr -d ' ')"
-  assert_eq 0 "$(find "$T/tmp" -type f | wc -l | tr -d ' ')"
+  assert_eq 0 "$(find "$T/tmp" -mindepth 1 | wc -l | tr -d ' ')"
 }
 
 t_capture_redaction_failure_leaves_nothing_staged() {
@@ -158,7 +200,7 @@ t_capture_redaction_failure_leaves_nothing_staged() {
   cap_run || rc=$?
   assert_status 1 "$rc"
   assert_eq 0 "$(find "$STATE/staged" -type f | wc -l | tr -d ' ')"
-  assert_eq 0 "$(find "$T/tmp" -type f | wc -l | tr -d ' ')"
+  assert_eq 0 "$(find "$T/tmp" -mindepth 1 | wc -l | tr -d ' ')"
 }
 
 t_capture_rejects_invalid_session_id() {
@@ -168,4 +210,12 @@ t_capture_rejects_invalid_session_id() {
   [ "$rc" -eq 1 ]
   assert_contains "$(cat "$T/out")" "invalid session id"
   [ ! -e "$STATE/evil.md" ]
+}
+
+t_capture_redacts_secret_and_logs_class() {
+  cap_setup
+  ADLC_STUB_SECRET=1 cap_run
+  assert_not_contains "$NOTE" "PROJ-42"
+  assert_contains "$(cat "$STATE/log/redactions.log")" "jira-key"
+  assert_contains "$(cat "$STATE/log/redactions.log")" "email"
 }
