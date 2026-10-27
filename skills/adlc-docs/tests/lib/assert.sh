@@ -27,3 +27,9 @@ assert_contains() {
 assert_status() {
   [ "$1" -eq "$2" ] || fail "expected status $1 got $2${3:+ ($3)}"
 }
+
+assert_not_contains() {
+  if grep -qF -- "$2" "$1"; then
+    fail "expected $1 not to contain [$2]${3:+ ($3)}"
+  fi
+}

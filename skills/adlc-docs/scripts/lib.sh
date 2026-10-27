@@ -14,7 +14,7 @@ def human_text:
   | .message.content as $c
   | (
       if ($c | type) == "string" then
-        if ($c | test("^\\s*<local-command")) then empty
+        if ($c | test("^\\s*<(local-command|system-reminder)")) then empty
         elif ($c | test("<command-name>")) then
           ($c | capture("<command-name>(?<n>.*?)</command-name>"; "s") | .n | trim) as $n
           | (($c | capture("<command-args>(?<a>.*?)</command-args>"; "s")) // {a: ""} | .a | trim) as $a

@@ -23,8 +23,8 @@ t_digest_caps_long_assistant_message() {
 
 t_digest_excludes_noise() {
   bash "$SCRIPTS_DIR/digest.sh" --format claude "$FIXTURE_TRANSCRIPT" "$T/out.md"
-  ! grep -q 'synthetic' "$T/out.md"
-  ! grep -q 'command-' "$T/out.md"
+  assert_not_contains "$T/out.md" synthetic "noise leaked"
+  assert_not_contains "$T/out.md" command- "wrapper leaked"
 }
 
 t_prompt_count_ignores_meta_and_tool_results() {
@@ -77,7 +77,7 @@ t_digest_total_cap_trims_ai_from_middle() {
   grep -q 'last prompt' "$T/out.md"
   grep -q 'm000 ' "$T/out.md"
   grep -q 'm199 ' "$T/out.md"
-  ! grep -q 'm100 ' "$T/out.md"
+  assert_not_contains "$T/out.md" 'm100 ' "middle message kept"
   grep -q 'omitted to fit size cap' "$T/out.md"
 }
 
