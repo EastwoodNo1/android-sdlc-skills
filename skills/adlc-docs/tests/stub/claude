@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+[ -n "${ADLC_STUB_LOG:-}" ] && printf '%s\n' "$*" >>"$ADLC_STUB_LOG"
+[ "${ADLC_STUB_FAIL:-}" = "1" ] && exit 1
+for arg in "$@"; do
+  case "$arg" in
+    *"NOTE: "*)
+      path=$(printf '%s\n' "$arg" | sed -n 's/.*NOTE: \([^[:space:]]*\).*/\1/p' | head -n 1)
+      if [ -n "$path" ]; then
+        printf '# stub note\nContact someone@example.com about /Users/x/project\n' >"$path"
+      fi
+      ;;
+  esac
+done
+exit 0
