@@ -23,14 +23,14 @@ In a project's `.claude/settings.json`:
 {
   "extraKnownMarketplaces": {
     "android-sdlc-skills": {
-      "source": { "source": "github", "repo": "EastwoodNo1/android-sdlc-skills", "ref": "v0.1.1" }
+      "source": { "source": "github", "repo": "EastwoodNo1/android-sdlc-skills", "ref": "v0.3.0" }
     }
   },
   "enabledPlugins": { "android-sdlc@android-sdlc-skills": true }
 }
 ```
 
-Or by hand, pinned to the tag: `claude plugin marketplace add EastwoodNo1/android-sdlc-skills#v0.1.1 --scope project` and `claude plugin install android-sdlc@android-sdlc-skills`. Try it without installing: `claude --plugin-dir <path to this repo>`.
+Or by hand, pinned to the tag: `claude plugin marketplace add EastwoodNo1/android-sdlc-skills#v0.3.0 --scope project` and `claude plugin install android-sdlc@android-sdlc-skills`. Try it without installing: `claude --plugin-dir <path to this repo>`.
 
 Docs used: https://code.claude.com/docs/en/plugins-reference, https://code.claude.com/docs/en/plugin-marketplaces, https://code.claude.com/docs/en/settings-reference, https://code.claude.com/docs/en/skills.
 
