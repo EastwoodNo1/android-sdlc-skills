@@ -6,7 +6,7 @@ object Cli {
     const val USAGE =
         "usage: checks no-comments <path...> | commit-message <file> | commit-messages <file> | " +
             "pr-body <bodyFile> <labelsFile> | pr-title <titleFile> | tests-changed <pathsFile> <module...> | " +
-            "workflows <path...> | manifest <path>"
+            "workflows <path...> | manifest <path> | backup-rules <allowedCsv> <path...>"
 
     fun run(
         args: List<String>,
@@ -59,6 +59,15 @@ object Cli {
 
                 "manifest" -> {
                     rest.singleOrNull()?.let { ManifestHardening.validate(readFile(it)) }
+                }
+
+                "backup-rules" -> {
+                    rest.takeIf { it.size >= 2 }?.let { arguments ->
+                        val allowed = arguments.first().split(',').toSet()
+                        arguments.drop(1).flatMap { path ->
+                            BackupRules.validate(readFile(path), allowed).map { "$path: $it" }
+                        }
+                    }
                 }
 
                 else -> {
