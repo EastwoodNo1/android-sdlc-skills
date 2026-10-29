@@ -10,6 +10,7 @@ evaluationDependsOn(":app")
 
 dependencies {
     kover(project(":domain"))
+    kover(project(":data"))
 }
 
 val checks = configurations.create("checks")
@@ -144,6 +145,17 @@ registerCheck(
     dependsOn(processReleaseMainManifest)
 }
 
+val backupRuleFiles = listOf("app/src/main/res/xml/backup_rules.xml", "app/src/main/res/xml/data_extraction_rules.xml")
+val backupAllowedPaths = listOf("datastore/settings.txt", "datastore/high_scores.txt")
+
+registerCheck(
+    "checkBackupRules",
+    "Fails when the backup rules include anything but the two DataStore files.",
+    provider { listOf("backup-rules", backupAllowedPaths.joinToString(",")) + backupRuleFiles },
+).configure {
+    inputs.files(backupRuleFiles)
+}
+
 tasks.register("checkPullRequest") {
     group = "verification"
     description = "Runs the PR title, body and tests-changed checks."
@@ -151,7 +163,7 @@ tasks.register("checkPullRequest") {
 }
 
 tasks.named("check") {
-    dependsOn(checkNoComments)
+    dependsOn(checkNoComments, "checkBackupRules")
 }
 
 apply(from = "gradle/ktlint.gradle.kts")

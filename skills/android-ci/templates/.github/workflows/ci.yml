@@ -53,11 +53,95 @@ jobs:
         with:
           cache-provider: basic
       - name: Check, release build and manifest
-        run: mise exec -- scripts/gradle-strict.sh check :checkNoComments :checkWorkflows :checkReleaseManifest :app:assembleRelease
+        run: mise exec -- scripts/gradle-strict.sh check :checkNoComments :checkWorkflows :checkReleaseManifest :checkBackupRules :app:assembleRelease
       - name: R8 mapping exists
         run: test -s app/build/outputs/mapping/release/mapping.txt
+      - name: 16 KB page alignment
+        run: '"$ANDROID_HOME/build-tools/37.0.0/zipalign" -c -P 16 -v 4 app/build/outputs/apk/release/app-release-unsigned.apk'
       - name: Check build-logic
         run: mise exec -- scripts/gradle-strict.sh :checks:check :checks:koverVerify
+
+  ui-tests:
+    name: ui-tests (${{ matrix.name }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: phone-37
+            api-level: "37.0"
+            target: google_atd
+            profile: pixel_7
+          - name: tablet-37
+            api-level: "37.0"
+            target: google_atd
+            profile: pixel_tablet
+          - name: phone-31
+            api-level: "31"
+            target: google_apis
+            profile: pixel_7
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install mise
+        env:
+          MISE_VERSION: v2026.10.19
+          MISE_SHA256: b7ad610a39474b36663a6b1134c17086fa77e0f39b7ecce85c684165eed5f086
+        run: |
+          archive="$RUNNER_TEMP/mise.tar.gz"
+          curl -fsSL --retry 3 -o "$archive" "https://github.com/jdx/mise/releases/download/${MISE_VERSION}/mise-${MISE_VERSION}-linux-x64.tar.gz"
+          echo "${MISE_SHA256}  ${archive}" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/mise-install"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/mise-install"
+          sudo install -m 755 "$RUNNER_TEMP/mise-install/mise/bin/mise" /usr/local/bin/mise
+      - name: Install locked tools
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mise --version
+          mise trust
+          mise install --locked
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$sdkmanager" --licenses < <(yes) > /dev/null
+          "$sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6
+        with:
+          cache-provider: basic
+      - name: Instrumented tests
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: ${{ matrix.target }}
+          arch: x86_64
+          profile: ${{ matrix.profile }}
+          cores: 3
+          ram-size: 4096M
+          heap-size: 512M
+          disk-size: 6000M
+          disable-animations: false
+          script: mise exec -- ./gradlew :app:connectedDebugAndroidTest
+      - name: Require executed tests
+        run: scripts/check-ui-test-results.sh
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: ui-tests-${{ matrix.name }}
+          path: |
+            app/build/outputs/androidTest-results/
+            app/build/outputs/connected_android_test_additional_output/
+          if-no-files-found: warn
 
   pr-rules:
     if: github.event_name == 'pull_request'

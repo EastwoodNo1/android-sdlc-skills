@@ -27,6 +27,8 @@ class CliTest {
             "wf-clean" to "permissions: {}\non: push\n",
             "wf-bad" to "permissions: {}\non: pull_request_target\n",
             "manifest-good" to manifestXml(""),
+            "backup-good" to "<full-backup-content><include domain=\"file\" path=\"a\" /></full-backup-content>",
+            "backup-bad" to "<full-backup-content><include domain=\"file\" path=\"b/\" /></full-backup-content>",
             "manifest-bad" to manifestXml("""<uses-permission android:name="android.permission.INTERNET" />"""),
         )
 
@@ -178,8 +180,22 @@ class CliTest {
     }
 
     @Test
+    fun backupRulesCleanExitsZero() {
+        assertEquals(0 to emptyList<String>(), run("backup-rules", "a", "backup-good"))
+    }
+
+    @Test
+    fun backupRulesViolationExitsOneAndNamesTheFile() {
+        val (code, printed) = run("backup-rules", "a", "backup-bad")
+        assertEquals(1, code)
+        assertTrue(printed.all { it.startsWith("backup-bad: ") })
+        assertTrue(printed.any { "b/" in it })
+    }
+
+    @Test
     fun wrongArgumentCountPrintsUsageAndExitsTwo() {
         listOf(
+            arrayOf("backup-rules", "a"),
             arrayOf("commit-message"),
             arrayOf("commit-message", "a", "b"),
             arrayOf("commit-messages"),
