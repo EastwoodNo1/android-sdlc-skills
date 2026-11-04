@@ -17,7 +17,33 @@ The plugin registers two hooks in `hooks/hooks.json`. `SessionEnd` starts a deta
 
 ## Install
 
-In a project's `.claude/settings.json`:
+Claude Code installs plugins from a marketplace in two steps: add the marketplace, then install the plugin from it. This repo is both. Requires Claude Code with plugin support, `git` and access to GitHub.
+
+### Option 1: inside Claude Code (recommended)
+
+Start `claude` in your project and run:
+
+```
+/plugin marketplace add EastwoodNo1/android-sdlc-skills
+/plugin install android-sdlc@android-sdlc-skills
+```
+
+Pick the scope in the panel that opens (`--scope` is for the shell commands in Option 2): `user` for all your projects, `project` to share it with the team through `.claude/settings.json`, `local` for just you in this repo. Then run `/reload-plugins` (or restart Claude Code) and check with `/plugin` that `android-sdlc` is enabled. The skills show up as `/android-sdlc:git-hooks`, `/android-sdlc:android-ci`, `/android-sdlc:sdlc-rules` and `/android-sdlc:adlc-docs`.
+
+To pin a release instead of the default branch, add the marketplace with a tag: `/plugin marketplace add EastwoodNo1/android-sdlc-skills#v0.3.0`.
+
+### Option 2: from the terminal
+
+The same steps as commands, which also work in scripts:
+
+```bash
+claude plugin marketplace add EastwoodNo1/android-sdlc-skills#v0.3.0 --scope project
+claude plugin install android-sdlc@android-sdlc-skills --scope project
+```
+
+### Option 3: for a whole team, through settings
+
+Commit this to a project's `.claude/settings.json`. After a teammate trusts the folder, Claude Code registers the marketplace and enables the plugin. Trust is required first:
 
 ```json
 {
@@ -30,7 +56,26 @@ In a project's `.claude/settings.json`:
 }
 ```
 
-Or by hand, pinned to the tag: `claude plugin marketplace add EastwoodNo1/android-sdlc-skills#v0.3.0 --scope project` and `claude plugin install android-sdlc@android-sdlc-skills`. Try it without installing: `claude --plugin-dir <path to this repo>`.
+### Try it without installing
+
+```bash
+git clone https://github.com/EastwoodNo1/android-sdlc-skills
+claude --plugin-dir ./android-sdlc-skills
+```
+
+### Update or remove
+
+```
+/plugin marketplace update android-sdlc-skills
+/plugin uninstall android-sdlc@android-sdlc-skills
+```
+
+`/plugin marketplace update` only refreshes the tag you pinned and does not move to a new release. To move on:
+
+- Team setup: change `ref` in `extraKnownMarketplaces`.
+- Marketplace you added yourself: run `claude plugin marketplace remove android-sdlc-skills` (this also uninstalls the plugin), then `claude plugin marketplace add EastwoodNo1/android-sdlc-skills#<new tag>` and install again.
+
+If `/plugin` shows `Plugin "android-sdlc" is enabled in project settings but isn't installed here`, run `claude plugin install android-sdlc@android-sdlc-skills --scope project` once.
 
 Docs used: https://code.claude.com/docs/en/plugins-reference, https://code.claude.com/docs/en/plugin-marketplaces, https://code.claude.com/docs/en/settings-reference, https://code.claude.com/docs/en/skills.
 
