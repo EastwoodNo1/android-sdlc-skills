@@ -1,6 +1,6 @@
 # android-sdlc-skills
 
-A Claude Code plugin, `android-sdlc`, with the SDLC tooling of [SuperSnake](https://github.com/EastwoodNo1/SuperSnake) as four skills:
+A Claude Code plugin, `android-sdlc`, with SDLC tooling for Android/Kotlin Gradle projects as four skills:
 
 | Skill | Use it to |
 |-------|-----------|
@@ -9,7 +9,7 @@ A Claude Code plugin, `android-sdlc`, with the SDLC tooling of [SuperSnake](http
 | `android-sdlc:sdlc-rules` | learn the workflow: rules versus practices, flow, evidence, dependencies, versions, Dependabot |
 | `android-sdlc:adlc-docs` | adopt automatic lifecycle documentation: copy `docs/adlc/` templates, add the policy, backfill, fold in staged notes |
 
-The `templates/` directories under each skill are byte copies of SuperSnake files. `scripts/verify-templates.sh <consumer-repo>` lists every file that differs and exits 1 on drift.
+The `templates/` directories under each skill are the source of truth. `scripts/verify-templates.sh <consumer-repo>` lists every template file that a project is missing or has changed and exits 1 on drift.
 
 ## ADLC documentation agent and hooks
 

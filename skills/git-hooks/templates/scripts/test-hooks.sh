@@ -95,7 +95,7 @@ stage_file "$WT" notes/c.txt c
 check "(c) bad commit message is refused" refused "type must be one of" git -C "$WT" commit -q -m bad
 reset_tree "$WT"
 
-stage_file "$WT" domain/src/main/kotlin/io/github/eastwoodno1/supersnake/domain/Tmp.kt "// x"
+stage_file "$WT" domain/src/main/kotlin/com/example/app/domain/Tmp.kt "// x"
 check "(d) comment in a Kotlin file is refused" refused "comment not allowed" commit_valid "$WT" d
 reset_tree "$WT"
 
@@ -119,9 +119,9 @@ push_failing_test() {
   grep -qF "refusing to push to main" "$TMP/main.err" || return 0
   push_stdin "$WT" feat/x
 }
-mkdir -p "$WT/domain/src/test/kotlin/io/github/eastwoodno1/supersnake/domain"
-cat >"$WT/domain/src/test/kotlin/io/github/eastwoodno1/supersnake/domain/FailingTest.kt" <<'KT'
-package io.github.eastwoodno1.supersnake.domain
+mkdir -p "$WT/domain/src/test/kotlin/com/example/app/domain"
+cat >"$WT/domain/src/test/kotlin/com/example/app/domain/FailingTest.kt" <<'KT'
+package com.example.app.domain
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -134,7 +134,7 @@ class FailingTest {
 }
 KT
 check "(h) pre-push refuses main and a failing unit test" refused "FailingTest" push_failing_test
-rm -f "$WT/domain/src/test/kotlin/io/github/eastwoodno1/supersnake/domain/FailingTest.kt"
+rm -f "$WT/domain/src/test/kotlin/com/example/app/domain/FailingTest.kt"
 
 mkdir -p "$WT/.github/workflows"
 cat >"$WT/.github/workflows/bad.yml" <<'YML'

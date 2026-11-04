@@ -1,6 +1,6 @@
 ---
 name: sdlc-rules
-description: The SuperSnake SDLC for Android/Kotlin projects. Rules (machine-enforced) versus practices (taught), the per-change flow with issue, worktree, test first, small Conventional commits and squash-merged PRs, the evidence rule, the third-party dependency rule, version verification with the CodeQL Kotlin cap, Dependabot handling and releases. Use before starting or reviewing any change, writing a commit or PR, adding a dependency, bumping a version, or when asked how work is done in the project.
+description: The SDLC for Android/Kotlin projects. Rules (machine-enforced) versus practices (taught), the per-change flow with issue, worktree, test first, small Conventional commits and squash-merged PRs, the evidence rule, the third-party dependency rule, version verification with the CodeQL Kotlin cap, Dependabot handling and releases. Use before starting or reviewing any change, writing a commit or PR, adding a dependency, bumping a version, or when asked how work is done in the project.
 ---
 
 # sdlc-rules
