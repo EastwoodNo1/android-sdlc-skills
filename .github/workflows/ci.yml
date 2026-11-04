@@ -21,11 +21,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: EastwoodNo1/SuperSnake
-          path: supersnake
-          persist-credentials: false
       - name: Install mise
         env:
           MISE_VERSION: v2026.10.19
@@ -45,8 +40,6 @@ jobs:
           mise --version
           mise trust
           mise install --locked
-      - name: Templates match SuperSnake
-        run: scripts/verify-templates.sh supersnake
       - name: shellcheck
         run: |
           shellcheck --version

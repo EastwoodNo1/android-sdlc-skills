@@ -1,6 +1,6 @@
 # Contributing
 
-This repo follows the SuperSnake workflow where it applies to a repo that is not an Android app. The `sdlc-rules` skill describes it.
+This repo follows the workflow of its `sdlc-rules` skill where it applies to a repo that is not an Android app.
 
 1. Open an issue that says why.
 2. Work on a branch `<type>/<name>` in a git worktree: `git worktree add ../android-sdlc-skills-<name> -b <type>/<name>`.
@@ -9,9 +9,9 @@ This repo follows the SuperSnake workflow where it applies to a repo that is not
 5. Open a PR. The title is a Conventional header of at most 64 characters. The body has `Closes #<issue>` and an `## Evidence` section with real command output or a CI link.
 6. Squash merge only, once the required check `verify` is green and the branch is up to date with `main`.
 
-Templates are copies. Change a file in SuperSnake first, then copy it here and run `scripts/verify-templates.sh <SuperSnake checkout>`: it must print `0 drift`. The exception is the ADLC templates under `skills/adlc-docs/templates/`: they originate here, not in SuperSnake, and are not drift-checked.
+The templates under `skills/*/templates/` are the source of truth: change them here. To see how a project differs from them, run `scripts/verify-templates.sh <project>`.
 
-Local checks: `scripts/verify-templates.sh ../SuperSnake`, `shellcheck`, `zizmor .github/`, and in `skills/android-ci/templates`: `cp ../reference/libs.versions.toml gradle/libs.versions.toml` (git-ignored) then `mise exec -- ../../../gradlew -p build-logic/checks test koverVerify`.
+Local checks: `shellcheck`, `zizmor .github/`, and in `skills/android-ci/templates`: `cp ../reference/libs.versions.toml gradle/libs.versions.toml` (git-ignored) then `mise exec -- ../../../gradlew -p build-logic/checks test koverVerify`.
 
 Repo settings are applied with `scripts/github/apply-repo-settings.sh EastwoodNo1/android-sdlc-skills`.
 

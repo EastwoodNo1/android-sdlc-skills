@@ -5,7 +5,7 @@ description: Installs plain-shell git hooks (worktree-only commits, no commits o
 
 # git-hooks
 
-The hooks call Gradle tasks (`:checkNoComments`, `:ktlintCheck`, `:checkCommitMessage`) that come from the `android-sdlc:android-ci` skill. If the project's root build does not define them yet, run that skill's wiring steps first (its steps 2 and 3). Templates sit in `${CLAUDE_SKILL_DIR}/templates/` and are byte copies of the SuperSnake files they came from.
+The hooks call Gradle tasks (`:checkNoComments`, `:ktlintCheck`, `:checkCommitMessage`) that come from the `android-sdlc:android-ci` skill. If the project's root build does not define them yet, run that skill's wiring steps first (its steps 2 and 3). Templates sit in `${CLAUDE_SKILL_DIR}/templates/`.
 
 Show the evidence named in each step. Never say a step worked without it.
 
@@ -19,7 +19,7 @@ Command hygiene: type literal absolute paths (`${CLAUDE_SKILL_DIR}` is already e
    Evidence: `ls -l .githooks scripts` showing `-rwxr-xr-x`.
 3. Adapt only what is project-specific, then show `git diff` of those lines:
    - `scripts/bootstrap.sh`: the Android SDK package checks (`platforms/android-<compileSdk>`, `build-tools/<version>`, `cmdline-tools/latest`) and the `JDK_TOOL` name must match `mise.toml`. Keep the Adoptium checksum cross-check.
-   - `scripts/test-hooks.sh`: replace the `io/github/eastwoodno1/supersnake/domain` paths and the `package` line with the project's domain package.
+   - `scripts/test-hooks.sh`: replace the `com/example/app/domain` paths and the `package` line with the project's domain package.
    - `scripts/gradle-strict.sh`: it allowlists one AGP 9.4.1 deprecation message. Run `./gradlew help --warning-mode=all`. If the project's AGP prints a different deprecation, report it rather than widening the allowlist. If it prints none, remove the allowlist line.
    - No comments in any file (`#` lines in `*.sh` are not allowed, a shebang is). Evidence: `./gradlew :checkNoComments` output.
 4. Create `local.properties` with `sdk.dir=<Android SDK path>` (it is git-ignored and `test-hooks.sh` copies it). Evidence: `grep -c '^local.properties' .gitignore`.
