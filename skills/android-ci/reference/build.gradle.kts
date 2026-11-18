@@ -1,3 +1,11 @@
+import sdlc.checks.VersionCode
+
+buildscript {
+    dependencies {
+        classpath("sdlc:checks")
+    }
+}
+
 plugins {
     base
     alias(libs.plugins.android.application) apply false
@@ -5,6 +13,16 @@ plugins {
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.kover)
 }
+
+val versionText =
+    providers
+        .fileContents(layout.projectDirectory.file("version.txt"))
+        .asText
+        .get()
+        .trim()
+
+extra["versionName"] = versionText
+extra["versionCode"] = VersionCode.of(versionText)
 
 evaluationDependsOn(":app")
 

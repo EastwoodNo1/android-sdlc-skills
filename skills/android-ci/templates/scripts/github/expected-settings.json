@@ -41,11 +41,41 @@
         {"context": "analyze (java-kotlin)", "integration_id": 15368},
         {"context": "checks", "integration_id": 15368},
         {"context": "pr-rules", "integration_id": 15368},
+        {"context": "release-smoke", "integration_id": 15368},
         {"context": "ui-tests (phone-31)", "integration_id": 15368}
       ]
     }
   },
   "label": {
     "name": "dependencies"
-  }
+  },
+  "environments": {
+    "release-please": {
+      "deployment_branch_policy": {"custom_branch_policies": true, "protected_branches": false},
+      "branch_policies": ["main"],
+      "reviewers": [],
+      "prevent_self_review": false,
+      "can_admins_bypass": true,
+      "secrets": ["RELEASE_APP_PRIVATE_KEY"]
+    },
+    "release": {
+      "deployment_branch_policy": {"custom_branch_policies": true, "protected_branches": false},
+      "branch_policies": ["main"],
+      "reviewers": [{"type": "User", "id": 0}],
+      "prevent_self_review": false,
+      "can_admins_bypass": false,
+      "secrets": ["RELEASE_KEYSTORE_BASE64", "RELEASE_KEYSTORE_PASSWORD", "RELEASE_KEY_ALIAS", "RELEASE_KEY_PASSWORD"]
+    }
+  },
+  "variables": ["RELEASE_APP_CLIENT_ID", "RELEASE_CERT_SHA256"],
+  "release_tags": {
+    "name": "release-tags",
+    "target": "tag",
+    "enforcement": "active",
+    "include": ["refs/tags/v*"],
+    "rule_types": ["creation", "deletion", "non_fast_forward", "update"],
+    "bypass_actors": [{"actor_id": 0, "actor_type": "Integration", "bypass_mode": "always"}]
+  },
+  "release_labels": ["autorelease: pending", "autorelease: tagged"],
+  "immutable_releases": {"enabled": true}
 }

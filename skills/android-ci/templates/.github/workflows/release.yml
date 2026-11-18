@@ -1,0 +1,362 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release-please
+    permissions: {}
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  build:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NAME: ${{ github.event.repository.name }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.release-please.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check the release ref
+        env:
+          SHA: ${{ needs.release-please.outputs.sha }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: scripts/check-release-ref.sh "$SHA" "$TAG" "$VERSION"
+      - name: Install mise
+        env:
+          MISE_VERSION: v2026.11.9
+          MISE_SHA256: 23ba592fcbc61f057e2b82c1eafd085832712ba0c759b714ca16cd06babca378
+        run: |
+          archive="$RUNNER_TEMP/mise.tar.gz"
+          curl -fsSL --retry 3 -o "$archive" "https://github.com/jdx/mise/releases/download/${MISE_VERSION}/mise-${MISE_VERSION}-linux-x64.tar.gz"
+          echo "${MISE_SHA256}  ${archive}" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/mise-install"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/mise-install"
+          sudo install -m 755 "$RUNNER_TEMP/mise-install/mise/bin/mise" /usr/local/bin/mise
+      - name: Install locked tools
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mise --version
+          mise trust
+          mise install --locked
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$sdkmanager" --licenses < <(yes) > /dev/null
+          "$sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
+        with:
+          cache-provider: basic
+      - name: Release build, manifest and checks
+        run: mise exec -- scripts/gradle-strict.sh :checkNoComments :checkWorkflows :checkReleaseManifest :checkBackupRules :app:assembleRelease
+      - name: Check build-logic
+        run: mise exec -- scripts/gradle-strict.sh :checks:check :checks:koverVerify
+      - name: 16 KB page alignment
+        run: '"$ANDROID_HOME/build-tools/37.0.0/zipalign" -c -P 16 -v 4 app/build/outputs/apk/release/app-release-unsigned.apk'
+      - name: Upload unsigned APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: unsigned-apk
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+
+  smoke:
+    needs: [release-please, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NAME: ${{ github.event.repository.name }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.release-please.outputs.sha }}
+          persist-credentials: false
+      - name: Install mise
+        env:
+          MISE_VERSION: v2026.11.9
+          MISE_SHA256: 23ba592fcbc61f057e2b82c1eafd085832712ba0c759b714ca16cd06babca378
+        run: |
+          archive="$RUNNER_TEMP/mise.tar.gz"
+          curl -fsSL --retry 3 -o "$archive" "https://github.com/jdx/mise/releases/download/${MISE_VERSION}/mise-${MISE_VERSION}-linux-x64.tar.gz"
+          echo "${MISE_SHA256}  ${archive}" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/mise-install"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/mise-install"
+          sudo install -m 755 "$RUNNER_TEMP/mise-install/mise/bin/mise" /usr/local/bin/mise
+      - name: Install locked tools
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mise --version
+          mise trust
+          mise install --locked
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$sdkmanager" --licenses < <(yes) > /dev/null
+          "$sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Download unsigned APK
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: unsigned-apk
+          path: ${{ runner.temp }}/unsigned
+      - name: Sign with a throwaway key
+        env:
+          UNSIGNED: ${{ runner.temp }}/unsigned/app-release-unsigned.apk
+        run: mise exec -- scripts/sign-throwaway.sh "$UNSIGNED" build/release-smoke/app-release.apk
+      - name: Smoke test the release APK
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: "31"
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          cores: 3
+          ram-size: 4096M
+          heap-size: 512M
+          disk-size: 6000M
+          disable-animations: false
+          script: scripts/release-smoke.sh build/release-smoke/app-release.apk
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-smoke
+          path: build/release-smoke/
+          if-no-files-found: warn
+
+  sign-publish:
+    needs: [release-please, build, smoke]
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release
+    env:
+      NAME: ${{ github.event.repository.name }}
+    permissions:
+      contents: write
+      attestations: write
+      id-token: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.release-please.outputs.sha }}
+          persist-credentials: false
+      - name: Install mise
+        env:
+          MISE_VERSION: v2026.11.9
+          MISE_SHA256: 23ba592fcbc61f057e2b82c1eafd085832712ba0c759b714ca16cd06babca378
+        run: |
+          archive="$RUNNER_TEMP/mise.tar.gz"
+          curl -fsSL --retry 3 -o "$archive" "https://github.com/jdx/mise/releases/download/${MISE_VERSION}/mise-${MISE_VERSION}-linux-x64.tar.gz"
+          echo "${MISE_SHA256}  ${archive}" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/mise-install"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/mise-install"
+          sudo install -m 755 "$RUNNER_TEMP/mise-install/mise/bin/mise" /usr/local/bin/mise
+      - name: Install locked tools
+        run: |
+          mise --version
+          mise trust
+          mise install --locked
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$sdkmanager" --licenses < <(yes) > /dev/null
+          "$sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"
+      - name: Download unsigned APK
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: unsigned-apk
+          path: ${{ runner.temp }}/unsigned
+      - name: Decode the keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.p12"
+      - name: Sign the APK
+        env:
+          KS_FILE: ${{ runner.temp }}/release.p12
+          KS_PASS: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          UNSIGNED: ${{ runner.temp }}/unsigned/app-release-unsigned.apk
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: mise exec -- scripts/sign-apk.sh "$UNSIGNED" "$RUNNER_TEMP/dist/$NAME-$VERSION.apk"
+      - name: Delete the keystore
+        run: rm -f "$RUNNER_TEMP/release.p12"
+      - name: Verify the signing certificate
+        env:
+          EXPECTED_SHA256: ${{ vars.RELEASE_CERT_SHA256 }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: mise exec -- scripts/verify-signature.sh "$RUNNER_TEMP/dist/$NAME-$VERSION.apk" "$EXPECTED_SHA256"
+      - name: 16 KB page alignment
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: '"$ANDROID_HOME/build-tools/37.0.0/zipalign" -c -P 16 -v 4 "$RUNNER_TEMP/dist/$NAME-$VERSION.apk"'
+      - name: Write the checksum
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          cd "$RUNNER_TEMP/dist"
+          sha256sum "$NAME-$VERSION.apk" > "$NAME-$VERSION.apk.sha256"
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: ${{ runner.temp }}/dist/${{ github.event.repository.name }}-${{ needs.release-please.outputs.version }}.apk
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: mise exec -- scripts/publish-release.sh "$TAG" "$RUNNER_TEMP/dist/$NAME-$VERSION.apk" "$RUNNER_TEMP/dist/$NAME-$VERSION.apk.sha256"
+      - name: Delete the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.p12"
+
+  verify-published:
+    needs: [release-please, sign-publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NAME: ${{ github.event.repository.name }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.release-please.outputs.sha }}
+          persist-credentials: false
+      - name: Install mise
+        env:
+          MISE_VERSION: v2026.11.9
+          MISE_SHA256: 23ba592fcbc61f057e2b82c1eafd085832712ba0c759b714ca16cd06babca378
+        run: |
+          archive="$RUNNER_TEMP/mise.tar.gz"
+          curl -fsSL --retry 3 -o "$archive" "https://github.com/jdx/mise/releases/download/${MISE_VERSION}/mise-${MISE_VERSION}-linux-x64.tar.gz"
+          echo "${MISE_SHA256}  ${archive}" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/mise-install"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/mise-install"
+          sudo install -m 755 "$RUNNER_TEMP/mise-install/mise/bin/mise" /usr/local/bin/mise
+      - name: Install locked tools
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mise --version
+          mise trust
+          mise install --locked
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$sdkmanager" --licenses < <(yes) > /dev/null
+          "$sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Download the release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: mise exec -- gh release download "$TAG" --pattern "$NAME-$VERSION.apk" --pattern "$NAME-$VERSION.apk.sha256" --dir "$RUNNER_TEMP/published"
+      - name: Verify the checksum
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          cd "$RUNNER_TEMP/published"
+          sha256sum -c "$NAME-$VERSION.apk.sha256"
+      - name: Verify the signing certificate
+        env:
+          EXPECTED_SHA256: ${{ vars.RELEASE_CERT_SHA256 }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: mise exec -- scripts/verify-signature.sh "$RUNNER_TEMP/published/$NAME-$VERSION.apk" "$EXPECTED_SHA256"
+      - name: Verify the attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: mise exec -- gh attestation verify "$RUNNER_TEMP/published/$NAME-$VERSION.apk" --repo "$GH_REPO"
+      - name: Verify the release attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          for attempt in 1 2 3; do
+            if mise exec -- gh release verify "$TAG" --repo "$GH_REPO"; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              sleep 20
+            fi
+          done
+          exit 1
+      - name: Smoke test the published APK
+        env:
+          APK: ${{ runner.temp }}/published/${{ github.event.repository.name }}-${{ needs.release-please.outputs.version }}.apk
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: "31"
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          cores: 3
+          ram-size: 4096M
+          heap-size: 512M
+          disk-size: 6000M
+          disable-animations: false
+          script: scripts/release-smoke.sh "$APK"
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-smoke-published
+          path: build/release-smoke/
+          if-no-files-found: warn
