@@ -166,6 +166,37 @@ settingsMergeFillsTheProjectIds() {
   [ "$(jq -S 'del(.environments.release.reviewers[0].id, .release_tags.bypass_actors[0].actor_id)' "$d/merged.json")" = "$(jq -S 'del(.environments.release.reviewers[0].id, .release_tags.bypass_actors[0].actor_id)' "$settings_template")" ] || fail "merge changed other keys"
 }
 
+settingsMergeAppliesTheMainBypassActors() {
+  local d="$work/bypass"
+  mkdir -p "$d"
+  printf '{"release_reviewer_user_id": 11, "release_app_id": 22}' > "$d/none.json"
+  PROJECT_SETTINGS="$d/none.json" "$settings_script" --print-expected > "$d/none.out" 2> "$d/none.err" || fail "print-expected failed: $(cat "$d/none.err")"
+  [ "$(jq -c '.ruleset.bypass_actors' "$d/none.out")" = "[]" ] || fail "the default main bypass list is not empty"
+  printf '{"release_reviewer_user_id": 11, "release_app_id": 22, "main_bypass_actors": [{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "pull_request"}]}' > "$d/admin.json"
+  PROJECT_SETTINGS="$d/admin.json" "$settings_script" --print-expected > "$d/admin.out" 2> "$d/admin.err" || fail "print-expected failed: $(cat "$d/admin.err")"
+  [ "$(jq -c '.ruleset.bypass_actors' "$d/admin.out")" = '[{"actor_id":5,"actor_type":"RepositoryRole","bypass_mode":"pull_request"}]' ] || fail "main bypass actors not applied"
+  [ "$(jq -c '.release_tags.bypass_actors' "$d/admin.out")" = "$(jq -c '.release_tags.bypass_actors' "$d/none.out")" ] || fail "the release-tags bypass list changed"
+}
+
+settingsMergeRejectsBadMainBypassActors() {
+  local d="$work/badbypass" rc=0
+  mkdir -p "$d"
+  printf '{"release_reviewer_user_id": 11, "release_app_id": 22, "main_bypass_actors": [{"actor_id": 0, "actor_type": "RepositoryRole", "bypass_mode": "pull_request"}]}' > "$d/zero.json"
+  PROJECT_SETTINGS="$d/zero.json" "$settings_script" --print-expected > /dev/null 2> "$d/zero.err" || rc=$?
+  expect_status 2 "$rc" "zero actor id"
+  expect_in "$d/zero.err" "main_bypass_actors"
+  rc=0
+  printf '{"release_reviewer_user_id": 11, "release_app_id": 22, "main_bypass_actors": [{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "sometimes"}]}' > "$d/mode.json"
+  PROJECT_SETTINGS="$d/mode.json" "$settings_script" --print-expected > /dev/null 2> "$d/mode.err" || rc=$?
+  expect_status 2 "$rc" "unknown bypass mode"
+  expect_in "$d/mode.err" "main_bypass_actors"
+  rc=0
+  printf '{"release_reviewer_user_id": 11, "release_app_id": 22, "main_bypass_actors": {"actor_id": 5}}' > "$d/obj.json"
+  PROJECT_SETTINGS="$d/obj.json" "$settings_script" --print-expected > /dev/null 2> "$d/obj.err" || rc=$?
+  expect_status 2 "$rc" "main_bypass_actors not an array"
+  expect_in "$d/obj.err" "main_bypass_actors"
+}
+
 settingsMergeRejectsBadProjectValues() {
   local d="$work/badmerge" rc=0
   mkdir -p "$d"
@@ -695,6 +726,8 @@ tests=(
   smokeKeepsAnExplicitPackage
   settingsTemplateCarriesNoProjectIds
   settingsMergeFillsTheProjectIds
+  settingsMergeAppliesTheMainBypassActors
+  settingsMergeRejectsBadMainBypassActors
   settingsMergeRejectsBadProjectValues
 )
 

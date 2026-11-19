@@ -24,11 +24,17 @@ for key in release_reviewer_user_id release_app_id; do
     || { echo "$project_file: $key must be a positive integer" >&2; exit 2; }
 done
 
+jq -e '(.main_bypass_actors // []) | type == "array" and all(.[];
+    (.actor_id | type == "number" and . > 0 and . == floor)
+    and (.actor_type | IN("RepositoryRole", "Team", "Integration", "OrganizationAdmin", "DeployKey"))
+    and (.bypass_mode | IN("always", "pull_request", "exempt")))' "$project_file" >/dev/null \
+  || { echo "$project_file: main_bypass_actors must be a list of {actor_id, actor_type, bypass_mode}" >&2; exit 2; }
 expected_file="$(mktemp)"
 trap 'rm -f "$expected_file"' EXIT
 jq --slurpfile p "$project_file" '
   .environments.release.reviewers |= map(.id = $p[0].release_reviewer_user_id)
   | .release_tags.bypass_actors |= map(.actor_id = $p[0].release_app_id)
+  | .ruleset.bypass_actors = ($p[0].main_bypass_actors // [])
 ' "$here/expected-settings.json" > "$expected_file"
 
 if [ "$print_expected" -eq 1 ]; then
@@ -115,6 +121,8 @@ ruleset_body='{
     }}
   ]
 }'
+
+ruleset_body="$(printf '%s' "$ruleset_body" | jq --slurpfile e "$expected_file" '.bypass_actors = $e[0].ruleset.bypass_actors')"
 
 ruleset_id="$(ruleset_id_by_name main-protection)"
 if [ -n "$ruleset_id" ]; then
