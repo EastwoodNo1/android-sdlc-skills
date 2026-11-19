@@ -20,7 +20,7 @@ Command hygiene: type literal absolute paths (`${CLAUDE_SKILL_DIR}` is already e
 3. Adapt only what is project-specific, then show `git diff` of those lines:
    - `scripts/bootstrap.sh`: the Android SDK package checks (`platforms/android-<compileSdk>`, `build-tools/<version>`, `cmdline-tools/latest`) and the `JDK_TOOL` name must match `mise.toml`. Keep the Adoptium checksum cross-check.
    - `scripts/test-hooks.sh`: replace the `com/example/app/domain` paths and the `package` line with the project's domain package.
-   - `scripts/gradle-strict.sh`: it allowlists one AGP 9.4.1 deprecation message. Run `./gradlew help --warning-mode=all`. If the project's AGP prints a different deprecation, report it rather than widening the allowlist. If it prints none, remove the allowlist line.
+   - `scripts/gradle-strict.sh`: it allowlists two upstream deprecation messages, AGP's `The Configuration.setVisible(boolean) method has been deprecated.` and Kover's `The Task.getAnt() method has been deprecated.` (Kotlin/kotlinx-kover#842). Run `./gradlew help --warning-mode=all`. If the project prints a different deprecation, report it rather than widening the allowlist; adding a line is the owner's decision. Remove an allowlist line the project never prints.
    - No comments in any file (`#` lines in `*.sh` are not allowed, a shebang is). Evidence: `./gradlew :checkNoComments` output.
 4. Create `local.properties` with `sdk.dir=<Android SDK path>` (it is git-ignored and `test-hooks.sh` copies it). Evidence: `grep -c '^local.properties' .gitignore`.
 5. Run `scripts/bootstrap.sh`. Evidence: its output, ending with the Android SDK package lines and `hooks installed`, and `git config core.hooksPath` printing `.githooks`.

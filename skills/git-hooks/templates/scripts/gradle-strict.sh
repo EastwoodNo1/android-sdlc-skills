@@ -10,6 +10,7 @@ if [ "$status" -ne 0 ]; then
 fi
 bad=$(grep -iE 'deprecat|scheduled to be removed' "$out" \
   | grep -vF 'The Configuration.setVisible(boolean) method has been deprecated.' \
+  | grep -vF 'The Task.getAnt() method has been deprecated.' \
   | grep -vE '^Deprecated Gradle features were used in this build')
 if [ -n "$bad" ]; then
   echo "gradle-strict: unexpected deprecation:" >&2

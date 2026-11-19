@@ -30,14 +30,14 @@ Start `claude` in your project and run:
 
 Pick the scope in the panel that opens (`--scope` is for the shell commands in Option 2): `user` for all your projects, `project` to share it with the team through `.claude/settings.json`, `local` for just you in this repo. Then run `/reload-plugins` (or restart Claude Code) and check with `/plugin` that `android-sdlc` is enabled. The skills show up as `/android-sdlc:git-hooks`, `/android-sdlc:android-ci`, `/android-sdlc:sdlc-rules` and `/android-sdlc:adlc-docs`.
 
-To pin a release instead of the default branch, add the marketplace with a tag: `/plugin marketplace add EastwoodNo1/android-sdlc-skills#v0.3.0`.
+To pin a release instead of the default branch, add the marketplace with a tag: `/plugin marketplace add EastwoodNo1/android-sdlc-skills#v0.4.0`.
 
 ### Option 2: from the terminal
 
 The same steps as commands, which also work in scripts:
 
 ```bash
-claude plugin marketplace add EastwoodNo1/android-sdlc-skills#v0.3.0 --scope project
+claude plugin marketplace add EastwoodNo1/android-sdlc-skills#v0.4.0 --scope project
 claude plugin install android-sdlc@android-sdlc-skills --scope project
 ```
 
@@ -49,7 +49,7 @@ Commit this to a project's `.claude/settings.json`. After a teammate trusts the 
 {
   "extraKnownMarketplaces": {
     "android-sdlc-skills": {
-      "source": { "source": "github", "repo": "EastwoodNo1/android-sdlc-skills", "ref": "v0.3.0" }
+      "source": { "source": "github", "repo": "EastwoodNo1/android-sdlc-skills", "ref": "v0.4.0" }
     }
   },
   "enabledPlugins": { "android-sdlc@android-sdlc-skills": true }

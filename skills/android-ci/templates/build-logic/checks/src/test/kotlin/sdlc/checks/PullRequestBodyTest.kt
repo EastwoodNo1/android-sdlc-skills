@@ -132,6 +132,43 @@ class PullRequestBodyTest {
     }
 
     @Test
+    fun autoreleasePendingWaivesIssueLinkAndEvidence() {
+        assertEquals(
+            emptyList(),
+            PullRequestBody.validate("## Release notes", setOf("autorelease: pending")),
+        )
+    }
+
+    @Test
+    fun autoreleaseTaggedWaivesIssueLinkAndEvidence() {
+        assertEquals(
+            emptyList(),
+            PullRequestBody.validate("## Release notes", setOf("autorelease: tagged")),
+        )
+    }
+
+    @Test
+    fun unrelatedAutoreleaseLabelDoesNotWaive() {
+        val errors = PullRequestBody.validate("## Release notes", setOf("autorelease: snapshot"))
+        assertError("link an issue", errors)
+        assertError("Evidence", errors)
+        assertEquals(2, errors.size)
+    }
+
+    @Test
+    fun dependenciesStillNeedsEvidence() {
+        val errors = PullRequestBody.validate(body(link = "Bump x", evidence = ""), setOf("dependencies"))
+        assertEquals(1, errors.size)
+        assertError("Evidence", errors)
+    }
+
+    @Test
+    fun autoreleaseDoesNotChangeOrdinaryPrs() {
+        assertEquals(emptyList(), PullRequestBody.validate(body(), setOf("bug")))
+        assertError("link an issue", PullRequestBody.validate(body(link = "No link"), setOf("bug")))
+    }
+
+    @Test
     fun templatePlaceholderMatchesTheConstant() {
         val template = File(System.getProperty("repoRoot"), ".github/pull_request_template.md").readText()
         assertTrue(PullRequestBody.EVIDENCE_PLACEHOLDER in template.lines())
