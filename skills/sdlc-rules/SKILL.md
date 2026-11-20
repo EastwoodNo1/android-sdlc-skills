@@ -1,6 +1,6 @@
 ---
 name: sdlc-rules
-description: The SDLC for Android/Kotlin projects. Rules (machine-enforced) versus practices (taught), the per-change flow with issue, worktree, test first, small Conventional commits and squash-merged PRs, the evidence rule, the third-party dependency rule, version verification with the CodeQL Kotlin cap, Dependabot handling, and releases through release-please, approval-gated signing and immutable GitHub releases. Use before starting or reviewing any change, writing a commit or PR, adding a dependency, bumping a version, cutting or recovering a release, or when asked how work is done in the project.
+description: The SDLC for Android/Kotlin projects. Rules (machine-enforced) versus practices (taught), the per-change flow with issue, worktree, test first, small Conventional commits and squash-merged PRs, the evidence rule, flaky UI tests, the third-party dependency rule, version verification with the CodeQL Kotlin cap, Dependabot handling, and releases through release-please, approval-gated signing and immutable GitHub releases. Use before starting or reviewing any change, writing a commit or PR, adding a dependency, bumping a version, cutting or recovering a release, investigating a flaky or timed-out UI test, or when asked how work is done in the project.
 ---
 
 # sdlc-rules
@@ -26,6 +26,16 @@ Show the evidence named for each step.
 - Rules are machine-enforced locally and in CI: no direct commits or pushes to `main`, worktree-only commits, a linked issue, tests with production changes in `:domain` or `:data`, Conventional Commits, no comments, ktlint and Lint at zero issues, tests and 100% line and branch coverage on gated modules, dependency verification, CodeQL, manifest hardening, a non-empty Evidence section, squash-only linear history, safe workflows. `--no-verify` changes nothing about what can merge.
 - Practices are taught and not gated: test first, stacking, small one-concern PRs, one worktree per branch. Say plainly that they are practices.
 - No comments in `*.kt`, `*.kts`, `*.xml`, `*.toml`, `*.yml`, `*.yaml`, `*.sh`, `*.pro`, `*.properties` (a shebang is allowed). This includes generated files: strip comments tools write, then run `:checkNoComments`. Markdown is not checked.
+
+## Flaky UI tests (practice)
+
+A UI test leg that goes red and then passes on a rerun is a bug until shown otherwise, usually in the test, not in the emulator. Typical causes: a sample that runs past a timed state (a countdown) into the next screen, a coroutine cancelled without being joined before the same resource (a DataStore file) is opened again, and a multi-pass test that resets its state only once.
+
+1. Find the test that failed in the run's test-result artifact (the JUnit XML) and read its failure and stack trace. Do not guess from the job log.
+2. Get a deterministic RED: force the state or timing that broke it, for example by seeding the data or asserting the time window the test relies on. Then fix it and show it green. Reproduce on a local AVD.
+3. If an intermittent failure cannot be forced, use a statistical RED. Loop the single test N times on the base commit, then on the fix, and report both counts and the chance of the clean run being luck. Example: 4 of 20 runs hung before the fix and 30 of 30 passed after; with a failure rate of 0.2, a clean 30 has odds of 0.8^30 ≈ 0.0012.
+4. Use a dedicated test AVD. Never boot the owner's own (playtest) AVD for test runs, and never uninstall or wipe an app the owner installed on any AVD. A test run can replace an installed build or fail with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, and the AVD may not come back as the owner left it.
+5. Reruns: at most two, then investigate. A one-off red on a required leg (during a release PR, say) gets at most two reruns plus a local loop of the failing test before the merge; record the test, the failure and the loop counts in the PR so a pattern shows if it recurs. Two job timeouts on one PR mean a hang that the PR caused.
 
 ## Evidence rule
 
