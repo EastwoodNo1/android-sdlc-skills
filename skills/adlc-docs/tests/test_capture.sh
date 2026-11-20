@@ -28,10 +28,80 @@ t_capture_writes_staged_note() {
   assert_contains "$(cat "$NOTE")" "# stub note"
 }
 
-t_capture_records_captured_id() {
+t_capture_records_captured_id_with_watermark() {
   cap_setup
   cap_run
-  grep -qxF "$CAP_SID" "$STATE/captured"
+  assert_eq "$(printf '%s\t3\t1' "$CAP_SID")" "$(cat "$STATE/captured")"
+}
+
+cap_resumable() {
+  cp "$CAP_TRANSCRIPT" "$T/s.jsonl"
+  CAP_TRANSCRIPT="$T/s.jsonl"
+}
+
+cap_append_prompts() {
+  local n=$1 i=1
+  while [ "$i" -le "$n" ]; do
+    printf '{"type":"user","isMeta":null,"timestamp":"2026-01-02T09:00:0%s.000Z","sessionId":"%s","message":{"role":"user","content":"resumed prompt %s"}}\n' "$i" "$CAP_SID" "$i" >>"$CAP_TRANSCRIPT"
+    printf '{"type":"assistant","timestamp":"2026-01-02T09:00:0%s.500Z","message":{"role":"assistant","content":[{"type":"text","text":"resumed reply %s"}]}}\n' "$i" "$i" >>"$CAP_TRANSCRIPT"
+    i=$((i + 1))
+  done
+}
+
+t_capture_resumed_session_writes_second_note_with_only_new_part() {
+  cap_setup
+  cap_resumable
+  cap_run
+  [ -s "$NOTE" ]
+  cap_append_prompts 3
+  ADLC_STUB_DIGEST_COPY="$T/digest2.md" cap_run
+  [ -s "$STATE/staged/2026-01-02-5e1f0c2a-2.md" ] || fail "no second note: $(ls "$STATE/staged"; cat "$T/out")"
+  assert_eq 1 "$(grep -c "^PART: 2$" "$ADLC_STUB_LOG")"
+  assert_contains "$(cat "$T/digest2.md")" "resumed prompt 1"
+  assert_contains "$(cat "$T/digest2.md")" "resumed prompt 3"
+  assert_contains "$(cat "$T/digest2.md")" "resumed reply 3"
+  assert_not_contains "$T/digest2.md" "Add a retry to the fetch helper"
+  assert_not_contains "$T/digest2.md" "outline the parser"
+  assert_eq 2 "$(find "$STATE/staged" -type f | wc -l | tr -d ' ')"
+  assert_eq "$(printf '%s\t6\t2' "$CAP_SID")" "$(tail -n 1 "$STATE/captured")"
+}
+
+t_capture_third_part_after_more_growth() {
+  cap_setup
+  cap_resumable
+  cap_run
+  cap_append_prompts 3
+  cap_run
+  cap_append_prompts 4
+  ADLC_STUB_DIGEST_COPY="$T/digest3.md" cap_run
+  [ -s "$STATE/staged/2026-01-02-5e1f0c2a-3.md" ] || fail "no third note: $(ls "$STATE/staged")"
+  assert_eq 4 "$(grep -c '^## Human' "$T/digest3.md")"
+  assert_eq "$(printf '%s\t10\t3' "$CAP_SID")" "$(tail -n 1 "$STATE/captured")"
+}
+
+t_capture_resumed_session_with_little_growth_is_skipped() {
+  cap_setup
+  cap_resumable
+  cap_run
+  cap_append_prompts 2
+  cap_run
+  assert_contains "$(cat "$T/out")" "already captured"
+  assert_eq 1 "$(find "$STATE/staged" -type f | wc -l | tr -d ' ')"
+  assert_eq 1 "$(wc -l <"$STATE/captured" | tr -d ' ')"
+}
+
+t_capture_bare_id_is_treated_as_captured_to_current_end() {
+  cap_setup
+  cap_resumable
+  printf '%s\n' "$CAP_SID" >"$STATE/captured"
+  cap_run
+  assert_contains "$(cat "$T/out")" "already captured"
+  [ ! -e "$STATE/staged" ] || assert_eq 0 "$(find "$STATE/staged" -type f | wc -l | tr -d ' ')"
+  assert_eq "$(printf '%s\t3\t1' "$CAP_SID")" "$(tail -n 1 "$STATE/captured")"
+  cap_append_prompts 3
+  ADLC_STUB_DIGEST_COPY="$T/digest2.md" cap_run
+  [ -s "$STATE/staged/2026-01-02-5e1f0c2a-2.md" ] || fail "no second note: $(cat "$T/out")"
+  assert_not_contains "$T/digest2.md" "Add a retry to the fetch helper"
 }
 
 t_capture_keeps_digest_out_of_state_dir() {
@@ -124,6 +194,7 @@ t_capture_passes_model_and_loop_guard() {
   cap_setup
   cap_run
   assert_contains "$(cat "$ADLC_STUB_LOG")" "--model sonnet"
+  assert_contains "$(cat "$ADLC_STUB_LOG")" "PART: 1"
   assert_contains "$(cat "$ADLC_STUB_LOG")" "disableAllHooks"
   assert_contains "$(cat "$ADLC_STUB_LOG")" "Edit(//"
   assert_not_contains "$ADLC_STUB_LOG" "Write("

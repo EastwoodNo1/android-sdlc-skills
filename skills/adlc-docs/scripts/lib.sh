@@ -69,6 +69,35 @@ adlc_human_prompt_count() {
   jq -Rn "$ADLC_JQ_DEFS"'[inputs | fromjson? | select(type == "object") | human_text] | length' <"$2"
 }
 
+adlc_capture_mark() {
+  [ -f "$1/captured" ] || return 1
+  awk -F '\t' -v id="$2" '
+    $1 == id { found = 1; mark = (NF >= 3) ? $2 " " $3 : "bare" }
+    END { if (!found) exit 1; print mark }
+  ' "$1/captured"
+}
+
+adlc_capture_due() {
+  local harness=$1 state=$2 id=$3 transcript=$4 count mark after part
+  count=$(adlc_human_prompt_count "$harness" "$transcript" 2>/dev/null) || return 1
+  if mark=$(adlc_capture_mark "$state" "$id"); then
+    if [ "$mark" = bare ]; then
+      printf '%s\t%s\t1\n' "$id" "$count" >>"$state/captured"
+      return 1
+    fi
+    after=${mark% *}
+    part=${mark#* }
+  else
+    after=0
+    part=0
+  fi
+  case "$after:$part:$count" in
+    *[!0-9:]* | :* | *::* | *:) return 1 ;;
+  esac
+  [ "$count" -ge $((after + 3)) ] || return 1
+  printf '%s %s %s\n' "$after" "$count" $((part + 1))
+}
+
 ADLC_AWK_STRUCT='
 BEGIN {
   if (keysfile != "") {

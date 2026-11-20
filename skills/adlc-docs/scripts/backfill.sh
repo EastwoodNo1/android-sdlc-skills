@@ -82,7 +82,6 @@ for dir in "$projects"/"$slug"*/; do
         ;;
     esac
     if [ "$id" = "$exclude" ] ||
-      { [ -f "$state/captured" ] && grep -qxF -- "$id" "$state/captured"; } ||
       { [ -f "$state/trivial" ] && grep -qxF -- "$id" "$state/trivial"; } ||
       { [ -f "$state/failed" ] && [ "$(grep -cxF -- "$id" "$state/failed")" -ge 2 ]; } ||
       [ -n "$(find "$file" -maxdepth 0 -mmin -10 2>/dev/null)" ]; then
@@ -99,7 +98,12 @@ for dir in "$projects"/"$slug"*/; do
       skipped=$((skipped + 1))
       continue
     fi
-    if ! [ "${count:-0}" -ge 3 ] 2>/dev/null; then
+    if adlc_capture_mark "$state" "$id" >/dev/null; then
+      if ! adlc_capture_due "$harness" "$state" "$id" "$file" >/dev/null; then
+        skipped=$((skipped + 1))
+        continue
+      fi
+    elif ! [ "${count:-0}" -ge 3 ] 2>/dev/null; then
       printf '%s\n' "$id" >>"$state/trivial"
       skipped=$((skipped + 1))
       continue
@@ -109,6 +113,14 @@ for dir in "$projects"/"$slug"*/; do
   done
 done
 
+capture_lines() {
+  [ -f "$state/captured" ] || {
+    printf '0\n'
+    return 0
+  }
+  awk -F '\t' -v id="$1" '$1 == id { n++ } END { print n + 0 }' "$state/captured"
+}
+
 captured=0
 while IFS="$(printf '\t')" read -r _ file; do
   [ -n "$file" ] || continue
@@ -116,8 +128,9 @@ while IFS="$(printf '\t')" read -r _ file; do
     break
   fi
   id=$(basename "$file" .jsonl)
+  before=$(capture_lines "$id")
   ADLC_CAPTURE=1 "$capture_cmd" "$harness" "$id" "$file" "$main" </dev/null || true
-  if [ -f "$state/captured" ] && grep -qxF -- "$id" "$state/captured"; then
+  if [ "$(capture_lines "$id")" -gt "$before" ]; then
     captured=$((captured + 1))
   else
     skipped=$((skipped + 1))

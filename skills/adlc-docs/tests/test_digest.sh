@@ -22,6 +22,20 @@ t_digest_excludes_noise() {
   assert_not_contains "$T/out.md" command- "wrapper leaked"
 }
 
+t_digest_prompt_range_keeps_only_those_turns() {
+  bash "$SCRIPTS_DIR/digest.sh" --format claude --prompts 1:2 "$FIXTURE_TRANSCRIPT" "$T/out.md"
+  assert_eq 1 "$(grep -c '^## Human' "$T/out.md")"
+  assert_not_contains "$T/out.md" "outline the parser"
+  assert_contains "$(cat "$T/out.md")" "Add a retry to the fetch helper"
+  assert_contains "$(cat "$T/out.md")" "I will read the helper first."
+  assert_contains "$(cat "$T/out.md")" "Start: 2026-01-01T10:00:03.000Z"
+}
+
+t_digest_prompt_range_past_end_is_empty_of_turns() {
+  bash "$SCRIPTS_DIR/digest.sh" --format claude --prompts 3:3 "$FIXTURE_TRANSCRIPT" "$T/out.md"
+  assert_eq 0 "$(grep -c '^## ' "$T/out.md" || true)"
+}
+
 t_prompt_count_ignores_meta_and_tool_results() {
   . "$SCRIPTS_DIR/lib.sh"
   assert_eq 3 "$(adlc_human_prompt_count claude "$FIXTURE_TRANSCRIPT")"

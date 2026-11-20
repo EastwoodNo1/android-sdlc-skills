@@ -109,6 +109,19 @@ t_backfill_matches_worktree_cwd() {
   assert_contains "$(sed -n 1p "$RECORD")" "$REPO capture=1"
 }
 
+t_backfill_recaptures_resumed_session_that_grew() {
+  bf_setup
+  local d
+  d=$(bf_slug "$REPO")
+  bf_session "$d" aaaa-0001 "$REPO" 2026-03-01T00:00:00Z 6
+  bf_session "$d" bbbb-0002 "$REPO" 2026-03-02T00:00:00Z 5
+  printf 'aaaa-0001\t3\t1\nbbbb-0002\t3\t1\n' >"$STATE/captured"
+  bf_run
+  assert_eq 1 "$(wc -l <"$RECORD" | tr -d ' ')"
+  assert_contains "$(cat "$RECORD")" "aaaa-0001"
+  assert_eq "captured 1, skipped 1" "$(cat "$T/stdout")"
+}
+
 t_backfill_skips_unsafe_session_ids() {
   bf_setup
   local d

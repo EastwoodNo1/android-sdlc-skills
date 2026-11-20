@@ -29,11 +29,7 @@ state=$(adlc_state_dir "$cwd") || exit 0
 adlc_opted_in "$cwd" || exit 0
 [ -f "$state/disabled" ] && exit 0
 [ -f "$transcript" ] || exit 0
-if [ -f "$state/captured" ] && grep -qxF -- "$session_id" "$state/captured"; then
-  exit 0
-fi
-count=$(adlc_human_prompt_count "$harness" "$transcript" 2>/dev/null) || exit 0
-[ "${count:-0}" -ge 3 ] 2>/dev/null || exit 0
+adlc_capture_due "$harness" "$state" "$session_id" "$transcript" >/dev/null || exit 0
 
 capture_cmd=${ADLC_CAPTURE_CMD:-$SCRIPT_DIR/capture.sh}
 mkdir -p "$state/log" || exit 0
