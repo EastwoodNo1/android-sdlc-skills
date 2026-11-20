@@ -55,6 +55,20 @@ Prefer the Kotlin standard library, the Android platform, AndroidX and Jetpack, 
 4. Kotlin cap: Kotlin goes no higher than the newest version on https://codeql.github.com/docs/codeql-overview/supported-languages-and-frameworks/. A Dependabot Kotlin bump beyond it stays open until CodeQL lists it, and `.github/dependabot.yml` ignores `org.jetbrains.kotlin*` versions above the cap.
 5. Tools come from `mise.toml` and `mise.lock`: `mise install --locked`.
 
+## A new stable release blocks every branch
+
+Lint's `AndroidGradlePluginVersion` (AGP) and `GradleDependency` checks fail `:app:lintDebug` the day a newer stable is published. With warnings as errors, that blocks the pre-push gate and every PR's `checks` at once, even PRs that touch nothing related. Do not suppress or baseline the check, and do not bump inside the blocked PR. Open a separate bump PR first, merge it, then rebase the blocked work on `main`.
+
+The bump PR:
+
+1. Bump the version after the "Verify a version before using it" steps above.
+2. Regenerate `gradle/verification-metadata.xml` with a fresh `GRADLE_USER_HOME` and `--refresh-dependencies` over `check :app:assembleRelease :checks:check`, plus one real `:app:connectedDebugAndroidTest` run, so the test platform (UTP) artifacts that only a device run resolves are covered.
+3. Remove every old companion entry and check that each removed component has a new counterpart. For AGP that is the old `gradle` version, the matching `32.x.y` tools components (lint, sdk-common and the rest) and the `<version>-<build>` artifacts such as `aapt2`.
+4. Add the Linux-only `aapt2` jar by hand (a macOS run does not resolve it), after comparing its SHA-1 with Google's published `.sha1` file.
+5. Update the `docs/versions.md` row with the version, the `last-modified` header of the new POM as the release date, the source URL and the date verified.
+
+The CI `checks` of the bump PR is the evidence that the block is gone; then rebase and re-run the blocked PRs.
+
 ## Dependabot pull requests (spec §13.13)
 
 Version updates and security alerts are on, grouped, with prefix `build` or `ci` and the `dependencies` label (which satisfies the issue-link check). A Dependabot PR only starts the work and cannot merge until someone adds commits that regenerate `gradle/verification-metadata.xml`, update `docs/versions.md` and fill in Evidence. There are no bot exceptions. Procedure: the `android-sdlc:android-ci` skill.

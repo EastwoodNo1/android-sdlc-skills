@@ -75,7 +75,7 @@ Failure policy:
 
 ## Dependabot pull requests
 
-A Dependabot PR only starts the work. Before it can merge, add commits that regenerate `gradle/verification-metadata.xml` (`./gradlew --write-verification-metadata sha256 check :app:assembleRelease :checks:check` with a fresh `GRADLE_USER_HOME` and `--refresh-dependencies`; add Linux-only artifacts such as the `aapt2` linux jar by hand after comparing SHA-1 with Google's `.sha1`), update `docs/versions.md`, and fill in Evidence. Strip tool-written comments. There are no bot exceptions. A Kotlin bump beyond the CodeQL-supported version stays open; the Dependabot template ignores `org.jetbrains.kotlin*` versions above the cap (`">2.4.20"`), so set it to the current cap and move it with the cap.
+A Dependabot PR only starts the work. Before it can merge, add commits that regenerate `gradle/verification-metadata.xml` (`./gradlew --write-verification-metadata sha256 check :app:assembleRelease :checks:check` with a fresh `GRADLE_USER_HOME` and `--refresh-dependencies`; add Linux-only artifacts such as the `aapt2` linux jar by hand after comparing SHA-1 with Google's `.sha1`), update `docs/versions.md`, and fill in Evidence. Strip tool-written comments. There are no bot exceptions. When a new stable AGP or Gradle makes Lint fail every branch (`AndroidGradlePluginVersion`, `GradleDependency`), follow "A new stable release blocks every branch" in the `android-sdlc:sdlc-rules` skill. A Kotlin bump beyond the CodeQL-supported version stays open; the Dependabot template ignores `org.jetbrains.kotlin*` versions above the cap (`">2.4.20"`), so set it to the current cap and move it with the cap.
 
 ## Keeping in sync
 
