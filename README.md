@@ -77,6 +77,41 @@ claude --plugin-dir ./android-sdlc-skills
 
 If `/plugin` shows `Plugin "android-sdlc" is enabled in project settings but isn't installed here`, run `claude plugin install android-sdlc@android-sdlc-skills --scope project` once.
 
+### Troubleshooting
+
+**A pinned install fails with "its source doesn't match its extraKnownMarketplaces entry".**
+
+```
+$ claude plugin marketplace add EastwoodNo1/android-sdlc-skills#v0.4.2 --scope project
+✘ Failed to add marketplace: Cannot add marketplace "android-sdlc-skills": its source doesn't match its extraKnownMarketplaces entry in user or managed settings; add it from the source that entry lists, or change the entry.
+```
+
+Your user settings (`~/.claude/settings.json`) already list this marketplace under `extraKnownMarketplaces`, but without a `ref` or with a different one. Every scope must then use exactly that source. Check the entry:
+
+```bash
+jq '.extraKnownMarketplaces["android-sdlc-skills"]' ~/.claude/settings.json
+```
+
+Fix it in one of two ways, then add the marketplace again:
+
+- Pin the same tag there: `"source": { "source": "github", "repo": "EastwoodNo1/android-sdlc-skills", "ref": "<tag>" }`.
+- Or remove the `android-sdlc-skills` entry from the user settings and let the project's `.claude/settings.json` pin it.
+
+**Old versions keep running.** Each scope (`user`, `project`, `local`) holds its own install, and an older install can keep its hooks running. In one project, a user-scope 0.3.0 install next to newer project-scope installs ran the `SessionEnd` capture from the 0.3.0 cache. List what is installed, with versions and scopes:
+
+```bash
+claude plugin list --json | jq '.[] | select(.id == "android-sdlc@android-sdlc-skills") | {version, scope, projectPath}'
+```
+
+Remove every install you do not want. `--scope` defaults to `user`. For `project` and `local`, run the command from the `projectPath` shown:
+
+```bash
+claude plugin uninstall android-sdlc@android-sdlc-skills --scope user
+claude plugin uninstall android-sdlc@android-sdlc-skills --scope project
+```
+
+Then install the pinned version again in the scope you want (Option 2 or 3), and run `claude plugin list --json` once more to confirm that only that install is left.
+
 Docs used: https://code.claude.com/docs/en/plugins-reference, https://code.claude.com/docs/en/plugin-marketplaces, https://code.claude.com/docs/en/settings-reference, https://code.claude.com/docs/en/skills.
 
 ## Versions
