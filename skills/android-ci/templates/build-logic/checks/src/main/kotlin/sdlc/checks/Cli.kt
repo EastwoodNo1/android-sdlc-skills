@@ -62,8 +62,15 @@ object Cli {
                 }
 
                 "backup-rules" -> {
-                    rest.takeIf { it.size >= 2 }?.let { arguments ->
-                        val allowed = arguments.first().split(',').toSet()
+                    val allowed =
+                        rest
+                            .firstOrNull()
+                            .orEmpty()
+                            .split(',')
+                            .map(String::trim)
+                            .filter(String::isNotEmpty)
+                            .toSet()
+                    rest.takeIf { it.size >= 2 && allowed.isNotEmpty() }?.let { arguments ->
                         arguments.drop(1).flatMap { path ->
                             BackupRules.validate(readFile(path), allowed).map { "$path: $it" }
                         }

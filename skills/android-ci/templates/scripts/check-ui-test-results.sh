@@ -17,8 +17,9 @@ while IFS= read -r file; do
     tests=$(sed -n 's/.* tests="\([0-9]*\)".*/\1/p' <<< "$suite")
     failures=$(sed -n 's/.* failures="\([0-9]*\)".*/\1/p' <<< "$suite")
     errors=$(sed -n 's/.* errors="\([0-9]*\)".*/\1/p' <<< "$suite")
-    if [ "${tests:-0}" -le 0 ] || [ "${failures:-1}" -ne 0 ] || [ "${errors:-1}" -ne 0 ]; then
-      echo "$file: tests=${tests:-?} failures=${failures:-?} errors=${errors:-?}" >&2
+    skipped=$(sed -n 's/.* skipped="\([0-9]*\)".*/\1/p' <<< "$suite")
+    if [ "${tests:-0}" -le "${skipped:-0}" ] || [ "${failures:-1}" -ne 0 ] || [ "${errors:-1}" -ne 0 ]; then
+      echo "$file: tests=${tests:-?} skipped=${skipped:-0} failures=${failures:-?} errors=${errors:-?}" >&2
       status=1
     else
       echo "$file: tests=$tests ok"
