@@ -1,6 +1,6 @@
 ---
 name: sdlc-rules
-description: The SDLC for Android/Kotlin projects. Rules (machine-enforced) versus practices (taught), the per-change flow with issue, worktree, test first, small Conventional commits and squash-merged PRs, the evidence rule, flaky UI tests, the third-party dependency rule, version verification with the CodeQL Kotlin cap, Dependabot handling, and releases through release-please, approval-gated signing and immutable GitHub releases. Use before starting or reviewing any change, writing a commit or PR, adding a dependency, bumping a version, cutting or recovering a release, investigating a flaky or timed-out UI test, or when asked how work is done in the project.
+description: The SDLC for Android/Kotlin projects. Rules (machine-enforced) versus practices (taught), the per-change flow with issue, worktree, test first, small Conventional commits and squash-merged PRs, the evidence rule, flaky UI tests, known Android pitfalls (a SurfaceView resize deadlock), the third-party dependency rule, version verification with the CodeQL Kotlin cap, Dependabot handling, and releases through release-please, approval-gated signing and immutable GitHub releases. Use before starting or reviewing any change, writing a commit or PR, adding a dependency, bumping a version, cutting or recovering a release, investigating a flaky or timed-out UI test, or when asked how work is done in the project.
 ---
 
 # sdlc-rules
@@ -38,6 +38,25 @@ A UI test leg that goes red and then passes on a rerun is a bug until shown othe
 5. Reruns: at most two, then investigate. A one-off red on a required leg (during a release PR, say) gets at most two reruns plus a local loop of the failing test before the merge; record the test, the failure and the loop counts in the PR so a pattern shows if it recurs. Two job timeouts on one PR mean a hang that the PR caused.
 6. Run instrumented tests under the AndroidX Test Orchestrator (setup in the `android-sdlc:android-ci` skill), so one wedged test fails alone instead of timing out the rest of the leg. It costs about 3 to 6 minutes per leg; say so when you add it.
 7. When a UI leg hits its job timeout, find the wedged test from the result artifact: compute each test's duration from the per-test logcat files. A run of tests that each took about the per-test timeout means a wedged process, and the first of them is the culprit. For the stacks, use the runner's `THREAD_STATE` dump (Java) and, while it hangs on a local AVD, `adb root` then `adb shell debuggerd -b <pid>` (native).
+
+## Known Android pitfalls
+
+- **A SurfaceView or GLSurfaceView resized right after its first layout can deadlock.** Seen with a `GLSurfaceView` (a game engine's fragment) hosted in Compose under `WindowInsets.safeDrawing` padding, on a screen that hides the system bars. The bars went away right after the first layout, so the surface was resized while its first frame's BLAST sync was still pending. The main thread waited in `GLSurfaceView.surfaceChanged` → `GLThread.onWindowResize`, and the GL thread waited in `BLASTBufferQueue::onFrameAvailable` (inside `eglSwapBuffers` → `queueBuffer`) for that sync, which needs the main thread. It froze 4 of 20 rotations on an API 37 tablet AVD and timed out the UI-test leg. The fix: create the surface view only after inset-driven layout changes settle, so its surface starts at its final size. For example, on a screen that hides the system bars (`val systemBars = WindowInsets.systemBars`), hold it back until those insets reach 0, with a timeout as a fallback:
+
+  ```kotlin
+  val barsSettled by produceState(false, systemBars, density, layoutDirection) {
+      withTimeoutOrNull(1_500) {
+          snapshotFlow {
+              systemBars.getTop(density) + systemBars.getBottom(density) +
+                  systemBars.getLeft(density, layoutDirection) + systemBars.getRight(density, layoutDirection)
+          }.first { it == 0 }
+      }
+      value = true
+  }
+  if (barsSettled) AndroidFragment<GlFragment>(Modifier.fillMaxSize())
+  ```
+
+  To diagnose a hang like this, use the test runner's `THREAD_STATE` dump for the Java stacks and, while it hangs on a local AVD, `adb root` then `adb shell debuggerd -b <pid>` for the native stacks. Not verified on real hardware. The blocking frame is in the platform's `libgui`, so real devices are plausibly affected.
 
 ## Evidence rule
 
