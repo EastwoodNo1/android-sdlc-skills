@@ -36,6 +36,8 @@ A UI test leg that goes red and then passes on a rerun is a bug until shown othe
 3. If an intermittent failure cannot be forced, use a statistical RED. Loop the single test N times on the base commit, then on the fix, and report both counts and the chance of the clean run being luck. Example: 4 of 20 runs hung before the fix and 30 of 30 passed after; with a failure rate of 0.2, a clean 30 has odds of 0.8^30 ≈ 0.0012.
 4. Use a dedicated test AVD. Never boot the owner's own (playtest) AVD for test runs, and never uninstall or wipe an app the owner installed on any AVD. A test run can replace an installed build or fail with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, and the AVD may not come back as the owner left it.
 5. Reruns: at most two, then investigate. A one-off red on a required leg (during a release PR, say) gets at most two reruns plus a local loop of the failing test before the merge; record the test, the failure and the loop counts in the PR so a pattern shows if it recurs. Two job timeouts on one PR mean a hang that the PR caused.
+6. Run instrumented tests under the AndroidX Test Orchestrator (setup in the `android-sdlc:android-ci` skill), so one wedged test fails alone instead of timing out the rest of the leg. It costs about 3 to 6 minutes per leg; say so when you add it.
+7. When a UI leg hits its job timeout, find the wedged test from the result artifact: compute each test's duration from the per-test logcat files. A run of tests that each took about the per-test timeout means a wedged process, and the first of them is the culprit. For the stacks, use the runner's `THREAD_STATE` dump (Java) and, while it hangs on a local AVD, `adb root` then `adb shell debuggerd -b <pid>` (native).
 
 ## Evidence rule
 
