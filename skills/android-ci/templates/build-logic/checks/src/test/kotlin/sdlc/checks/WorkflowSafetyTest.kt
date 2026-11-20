@@ -141,6 +141,37 @@ class WorkflowSafetyTest {
     }
 
     @Test
+    fun gradleRunWithoutSetupGradleIsFlagged() =
+        assertOne("gradle/actions/setup-gradle", 3, "    steps:\n      - run: ./gradlew assembleDebug\n")
+
+    @Test
+    fun gradleInsideARunBlockWithoutSetupGradleIsFlagged() {
+        val body = "    steps:\n      - name: Build\n        run: |\n          mise exec -- ./gradlew assembleDebug\n"
+        assertOne("gradle/actions/setup-gradle", 5, body)
+    }
+
+    @Test
+    fun strictGradleScriptWithoutSetupGradleIsFlagged() =
+        assertOne("gradle/actions/setup-gradle", 2, "run: mise exec -- scripts/gradle-strict.sh check\n")
+
+    @Test
+    fun onlyTheFirstGradleRunIsReported() {
+        val body = "- run: ./gradlew a\n- run: ./gradlew b\n"
+        assertEquals(listOf(2), scan(body).map { it.line })
+    }
+
+    @Test
+    fun gradleRunWithSetupGradleIsAccepted() {
+        val body = "- uses: gradle/actions/setup-gradle@$sha\n- run: ./gradlew assembleDebug\n"
+        assertEquals(emptyList(), scan(body))
+    }
+
+    @Test
+    fun gradleOutsideRunIsNotFlagged() {
+        assertEquals(emptyList(), scan("- name: ./gradlew wrapper check\n"))
+    }
+
+    @Test
     fun everyViolationLineIsReportedSeparately() {
         val body = "on: pull_request_target\njobs:\n  a:\n    steps:\n      - uses: x/y@v1\n"
         assertEquals(listOf(2, 6), scan(body).map { it.line })
