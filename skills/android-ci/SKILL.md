@@ -37,6 +37,21 @@ Command hygiene: type literal absolute paths (`${CLAUDE_SKILL_DIR}` is already e
 6. Repo settings, only after the owner approves the outward step, and the owner runs the script. Create the repo, push the initial commit to `main` first, then run `scripts/github/apply-repo-settings.sh <owner>/<repo>`. It applies squash-only merge (PR title and commit messages), the ruleset on the default branch (PR required, bypass only for the `main_bypass_actors` in `project-settings.json`, none by default, linear history, conversation resolution, strict required checks), the `release-tags` ruleset on `refs/tags/v*` (creation, update, deletion and force-push blocked, the release App as the only bypass actor), the environments `release-please` (`main` only, no reviewer) and `release` (`main` only, the release reviewer required, no admin bypass), the labels `autorelease: pending` and `autorelease: tagged`, immutable releases, secret scanning with push protection, Dependabot alerts, private vulnerability reporting, a read-only default token and fork-PR approval, then compares the result with `expected-settings.json` and prints `all settings match`. `--check <owner>/<repo>` only reads and compares. `--print-expected` prints `expected-settings.json` merged with `project-settings.json` and needs no `gh`. `expected-settings.json` carries 0 for both ids; the script fills them from `project-settings.json` (override the path with `PROJECT_SETTINGS`). Edit the required check names in `expected-settings.json` if the workflow job names differ. Evidence: that output. Do not create a remote for a throwaway project.
 7. Open the first PR. Its title is a Conventional header of at most 64 characters, its body has `Closes #<issue>` and a filled `## Evidence`. Wait for all required checks, then `gh pr merge <n> --squash`. Evidence: the CI run URL.
 
+## Live required checks
+
+GitHub enforces the required checks of the live `main-protection` ruleset, not the list in `scripts/github/expected-settings.json`. They match only after the owner has run `apply-repo-settings.sh` with the current file. Until then, a check added to the file (a new UI-test leg, say) does not block the merge button, and squash auto-merge can merge a PR while that check is pending or red.
+
+Before relying on auto-merge, and before calling a PR done, compare the two. All three commands only read:
+
+```bash
+gh api repos/<owner>/<repo>/rulesets --jq '.[] | select(.name == "main-protection") | .id'
+gh api repos/<owner>/<repo>/rulesets/<id> --jq '[.rules[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context] | sort'
+jq '[.ruleset.required_status_checks.required_status_checks[].context] | sort' scripts/github/expected-settings.json
+```
+
+- They match: the required checks are enforced; still report every check by name.
+- They differ: do not enable auto-merge. Wait for every check on the PR (`gh pr checks <n> --watch`), not only the required ones, and report each by name with its result before merging or calling the PR done. Tell the owner which checks are missing from the live ruleset. Only the owner runs `apply-repo-settings.sh`, in any mode, `--check` included.
+
 ## Release pipeline
 
 Facts come from the consumer's release runbook and spec; check the project's copy first, it wins.
