@@ -8,6 +8,8 @@ object WorkflowSafety {
     private val usesValue = Regex("""^\s*(?:-\s+)?uses:\s*(\S+)""")
     private val pinned = Regex("""@[0-9a-f]{40}$""")
     private val topLevelPermissions = Regex("""^permissions:\s*\{\}\s*$""")
+    private val gradleRun = Regex("""\bgradlew\b|\bgradle-strict\.sh\b""")
+    private const val SETUP_GRADLE = "gradle/actions/setup-gradle@"
 
     fun scan(
         path: String,
@@ -16,6 +18,8 @@ object WorkflowSafety {
         val lines = content.lines()
         val findings = mutableListOf<Finding>()
         var blockIndent: Int? = null
+        var firstGradleRun: Int? = null
+        var setsUpGradle = false
         lines.forEachIndexed { index, line ->
             val number = index + 1
             val active = blockIndent
@@ -29,13 +33,22 @@ object WorkflowSafety {
             if (forbidden != null) {
                 findings += Finding(path, number, "forbidden trigger: ${forbidden.value}")
             }
-            if ((inBlock || run != null) && eventData.containsMatchIn(line)) {
+            val inRun = inBlock || run != null
+            if (firstGradleRun == null && inRun && gradleRun.containsMatchIn(line)) {
+                firstGradleRun = number
+            }
+            if (inRun && eventData.containsMatchIn(line)) {
                 findings += Finding(path, number, "pass event data through env, never interpolate it in run")
             }
             val action = usesValue.find(line)?.let { it.groupValues[1].trim('"', '\'') }
+            if (action != null && action.startsWith(SETUP_GRADLE)) setsUpGradle = true
             if (action != null && !action.startsWith("./") && !pinned.containsMatchIn(action)) {
                 findings += Finding(path, number, "pin to a full commit SHA: $action")
             }
+        }
+        val gradleLine = firstGradleRun
+        if (gradleLine != null && !setsUpGradle) {
+            findings += Finding(path, gradleLine, "set up gradle/actions/setup-gradle before running Gradle")
         }
         if (lines.none(topLevelPermissions::matches)) {
             findings += Finding(path, 1, "workflow must declare top-level permissions: {}")
