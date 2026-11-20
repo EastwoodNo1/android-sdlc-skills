@@ -76,9 +76,34 @@ t_session_end_already_captured_starts_nothing() {
   se_opt_in
   state=$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)/adlc
   mkdir -p "$state"
+  printf 'other\t3\t1\n%s\t3\t1\n' "$SE_SID" >"$state/captured"
+  se_run claude
+  se_assert_nothing_started
+}
+
+t_session_end_bare_captured_id_starts_nothing() {
+  se_setup
+  se_opt_in
+  state=$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)/adlc
+  mkdir -p "$state"
   printf 'other\n%s\n' "$SE_SID" >"$state/captured"
   se_run claude
   se_assert_nothing_started
+}
+
+t_session_end_resumed_session_that_grew_starts_capture() {
+  se_setup
+  se_opt_in
+  state=$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)/adlc
+  mkdir -p "$state"
+  printf '%s\t3\t1\n' "$SE_SID" >"$state/captured"
+  cp "$SE_TRANSCRIPT" "$T/s.jsonl"
+  for i in 1 2 3; do
+    printf '{"type":"user","isMeta":null,"message":{"role":"user","content":"resumed prompt %s"}}\n' "$i" >>"$T/s.jsonl"
+  done
+  se_run claude "$T/s.jsonl"
+  se_wait_record
+  assert_contains "$(cat "$RECORD")" "args: [claude] [$SE_SID] [$T/s.jsonl] [$REPO]"
 }
 
 t_session_end_skips_tool_only_transcript() {

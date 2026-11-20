@@ -71,10 +71,17 @@ workdir=$(mktemp -d "${TMPDIR:-/tmp}/adlc-work.XXXXXX") || {
 workdir=$(cd "$workdir" && pwd -P) || exit 1
 work="$workdir/$session_id.md"
 
-if [ -f "$state/captured" ] && grep -qxF -- "$session_id" "$state/captured"; then
-  say "already captured $session_id"
+if ! due=$(adlc_capture_due "$harness" "$state" "$session_id" "$transcript"); then
+  if adlc_capture_mark "$state" "$session_id" >/dev/null; then
+    say "already captured $session_id"
+  else
+    say "fewer than 3 prompts in $session_id"
+  fi
   exit 0
 fi
+read -r after through part <<EOF2
+$due
+EOF2
 
 fail_capture() {
   say "$*"
@@ -96,23 +103,24 @@ prune_logs() {
   return 0
 }
 
-ts=$(jq -Rr 'fromjson? | objects | .timestamp? // empty | strings' <"$transcript" 2>/dev/null | head -n 1)
-day=$(printf '%s' "$ts" | cut -c1-10)
+digest="$workdir/digest.md"
+bash "$here/digest.sh" --format claude --prompts "$after:$through" "$transcript" "$digest" || fail_capture "digest failed"
+
+day=$(sed -n 's/^Start: //p' "$digest" | head -n 1 | cut -c1-10)
 case "$day" in
   [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
   *) day=$(date +%Y-%m-%d) ;;
 esac
-
-digest="$workdir/digest.md"
-note="$state/staged/$day-$(printf '%s' "$session_id" | cut -c1-8).md"
-
-bash "$here/digest.sh" --format claude "$transcript" "$digest" || fail_capture "digest failed"
+suffix=
+[ "$part" -gt 1 ] && suffix="-$part"
+note="$state/staged/$day-$(printf '%s' "$session_id" | cut -c1-8)$suffix.md"
 
 prompt="MODE: capture
 DIGEST: $digest
 NOTE: $work
 REPO: $top
 SESSION: $session_id
+PART: $part
 HARNESS: $harness"
 
 claude_bin=${ADLC_CLAUDE_BIN:-claude}
@@ -141,7 +149,7 @@ rc=0
 adlc_redact "$work" "$state" || fail_capture "redaction failed"
 mv "$work" "$note" || fail_capture "could not move note into staged"
 
-printf '%s\n' "$session_id" >>"$state/captured"
+printf '%s\t%s\t%s\n' "$session_id" "$through" "$part" >>"$state/captured"
 say "captured $session_id -> $note"
 prune_logs
 exit 0

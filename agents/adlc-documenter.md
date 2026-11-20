@@ -23,6 +23,7 @@ The prompt continues with:
 - `NOTE: <path>`: a private work path outside the repository to write the note to; the capture script redacts it and moves it into `staged/`
 - `REPO: <path>`: the repository, for read-only evidence from its files (plans, specs, docs)
 - `SESSION: <id>`
+- `PART: <n>`: 1 for the first note of a session. 2 or higher when the session was resumed after an earlier capture; the digest then covers only the turns after that capture, so describe only those and do not repeat the earlier part.
 - `HARNESS: <name>`
 
 Read the digest and, where it helps, files of the repository. You can read only the work directory and the repository, and write only `NOTE`. You have no shell in this mode. Write one staged note to `NOTE` in the staged note format below. Write nothing else: no other file, no change in the repository. Apply the privacy rules below.
@@ -36,7 +37,7 @@ The prompt continues with:
 
 Write only under `REPO/docs/adlc/`. Do not delete staged notes: the main agent does that after committing. Do not write memory. Steps:
 
-1. Copy each staged note to `docs/adlc/sessions/<date>-<topic>.md`, the committed session record. Leave the staged original in place.
+1. Copy each staged note to `docs/adlc/sessions/<date>-<topic>.md`, the committed session record. Leave the staged original in place. A note with `part` 2 or higher in its front matter (file name `<date>-<id>-<n>.md`) continues a session that already has a record: find that record by its `session` value, in `docs/adlc/sessions/` or among the notes of this fold-in, and append the note to it as a `## Continued <date> (part <n>)` section, in part order. Never create a second record for one session.
 2. Update the logs, appending rather than rewriting:
    - `PROJECT_EVOLUTION_TIMELINE.md`
    - `PROMPT_AND_INTERACTION_LOG.md`
@@ -59,7 +60,7 @@ Staged notes carry no stable IDs. Fold-in allocates `PROMPT-`, `DEC-`, `REQ-` an
 
 ## Staged note format
 
-Front matter: `session`, `date`, `harness`, `branch(es)`, `evidence_status` (a summary).
+Front matter: `session`, `part` (from `PART`), `date`, `harness`, `branch(es)`, `evidence_status` (a summary).
 
 Sections:
 
@@ -248,7 +249,7 @@ Avoid raw conversation dumps, trivial command logs, line-by-line code commentary
 - report documentation needs to the main agent
 
 ### During the session
-Automatic capture covers this: each session ends with one staged note, written in capture mode, so the records are updated after meaningful lifecycle events when evidence is available.
+Automatic capture covers this: each session ends with a staged note, written in capture mode (a resumed session that grew gets one more note per later capture), so the records are updated after meaningful lifecycle events when evidence is available.
 
 ### At the end (fold-in)
 Reconcile the documentation, identify unresolved gaps, and provide the completion report.

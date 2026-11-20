@@ -7,6 +7,7 @@ for arg in "$@"; do
       path=$(printf '%s\n' "$arg" | sed -n 's/^NOTE: //p' | head -n 1)
       digest=$(printf '%s\n' "$arg" | sed -n 's/^DIGEST: //p' | head -n 1)
       [ -s "$digest" ] || exit 3
+      [ -n "${ADLC_STUB_DIGEST_COPY:-}" ] && cp "$digest" "$ADLC_STUB_DIGEST_COPY"
       [ "${ADLC_STUB_NO_WRITE:-}" = "1" ] && exit 0
       if [ -n "$path" ]; then
         printf '# stub note\nContact someone@example.com about /Users/x/project\n' >"$path"

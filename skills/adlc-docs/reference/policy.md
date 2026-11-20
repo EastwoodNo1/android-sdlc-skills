@@ -49,7 +49,7 @@ Lifecycle documentation lives under `docs/adlc/`. Reuse equivalent existing docu
 - `REQUIREMENTS_TRACEABILITY.md`
 - `SOURCE_AND_UNCERTAINTY_REGISTER.md`
 - `PRESENTATION_SOURCE_GUIDE.md`
-- `sessions/` (one record per folded session)
+- `sessions/` (one record per folded session; a later part of a resumed session is appended to its record)
 
 ### Integrity
 
