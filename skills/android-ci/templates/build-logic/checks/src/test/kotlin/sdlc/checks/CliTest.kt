@@ -193,8 +193,19 @@ class CliTest {
     }
 
     @Test
+    fun backupRulesTrimsCsvEntriesAndDropsEmptyOnes() {
+        assertEquals(0 to emptyList<String>(), run("backup-rules", " a , ,", "backup-good"))
+    }
+
+    @Test
+    fun backupRulesWithOnlyEmptyEntriesPrintsUsage() {
+        assertEquals(2 to listOf(Cli.USAGE), run("backup-rules", " , ", "backup-good"))
+    }
+
+    @Test
     fun wrongArgumentCountPrintsUsageAndExitsTwo() {
         listOf(
+            arrayOf("backup-rules"),
             arrayOf("backup-rules", "a"),
             arrayOf("commit-message"),
             arrayOf("commit-message", "a", "b"),

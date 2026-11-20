@@ -75,7 +75,7 @@ require_package() {
   esac
 }
 
-require_package platforms/android-37.0 2
+require_package platforms/android-37.2 2
 require_package build-tools/37.0.0 37.0.0
 require_package cmdline-tools/latest '23.0*'
 

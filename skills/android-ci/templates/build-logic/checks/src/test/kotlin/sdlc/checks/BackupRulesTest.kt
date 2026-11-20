@@ -63,4 +63,62 @@ class BackupRulesTest {
     fun rejectsDocumentWithoutAnySection() {
         assertEquals(listOf("no backup section found"), BackupRules.validate("<other/>", allowed))
     }
+
+    @Test
+    fun rejectsEmptyIncludePath() {
+        val findings = BackupRules.validate(fullBackup(both + includes("file", "")), allowed)
+        assertEquals(1, findings.size)
+        assertTrue("empty" in findings.single())
+    }
+
+    @Test
+    fun rejectsWhitespaceIncludePath() {
+        val findings = BackupRules.validate(fullBackup(both + includes("file", "   ")), allowed)
+        assertEquals(1, findings.size)
+        assertTrue("empty" in findings.single())
+    }
+
+    @Test
+    fun rejectsMissingCloudBackupSection() {
+        val xml = "<data-extraction-rules><device-transfer>$both</device-transfer></data-extraction-rules>"
+        assertEquals(listOf("data-extraction-rules: cloud-backup section is missing"), BackupRules.validate(xml, allowed))
+    }
+
+    @Test
+    fun rejectsMissingDeviceTransferSection() {
+        val xml = "<data-extraction-rules><cloud-backup>$both</cloud-backup></data-extraction-rules>"
+        assertEquals(listOf("data-extraction-rules: device-transfer section is missing"), BackupRules.validate(xml, allowed))
+    }
+
+    @Test
+    fun rejectsDataExtractionRulesWithNoSections() {
+        val findings = BackupRules.validate("<data-extraction-rules/>", allowed)
+        assertEquals(2, findings.size)
+        assertTrue(findings.all { "section is missing" in it })
+    }
+
+    @Test
+    fun inspectsCrossPlatformTransfer() {
+        val xml =
+            "<data-extraction-rules><cloud-backup>$both</cloud-backup><device-transfer>$both</device-transfer>" +
+                "<cross-platform-transfer platform=\"ios\">${includes("file", "datastore/")}</cross-platform-transfer>" +
+                "</data-extraction-rules>"
+        val findings = BackupRules.validate(xml, allowed)
+        assertTrue(findings.any { it.startsWith("cross-platform-transfer: include path \"datastore/\" is not allowed") })
+        assertTrue(findings.any { it.startsWith("cross-platform-transfer: required include datastore/settings.txt is missing") })
+    }
+
+    @Test
+    fun acceptsCleanCrossPlatformTransfer() {
+        val xml =
+            "<data-extraction-rules><cloud-backup>$both</cloud-backup><device-transfer>$both</device-transfer>" +
+                "<cross-platform-transfer platform=\"ios\">$both</cross-platform-transfer></data-extraction-rules>"
+        assertEquals(emptyList(), BackupRules.validate(xml, allowed))
+    }
+
+    @Test
+    fun flagsDuplicateIncludes() {
+        val findings = BackupRules.validate(fullBackup(both + includes("file", "datastore/settings.txt")), allowed)
+        assertEquals(listOf("full-backup-content: duplicate include datastore/settings.txt"), findings)
+    }
 }

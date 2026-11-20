@@ -18,7 +18,7 @@ Show the evidence named for each step.
 5. Stack large work (practice) as small PRs with `gh stack` (pinned version in `scripts/bootstrap.sh`).
 6. Checks. Run `scripts/gradle-strict.sh check` before pushing, plus `:checkNoComments`, `:checkWorkflows` when relevant. Root tasks take a leading colon. Evidence: the command and its output.
 7. Pull request. Title is a Conventional header of at most 64 characters. Body: `Why`, `What`, `Closes #<issue>`, `## Evidence`. Run `:checkPullRequest` on the title and body first.
-8. Merge. Squash only, once the required checks (`checks`, `pr-rules`, `analyze (java-kotlin)`, `analyze (actions)`, `ui-tests (phone-31)`, `release-smoke`, or the project's list) are green and the branch is up to date with `main`: `gh pr merge <n> --squash`. Then pull `--ff-only` on `main`, remove the worktree, delete the branch, `git fetch --prune`. Review comment threads must be resolved. AI reviews run locally and are optional.
+8. Merge. Squash only, once the required checks (`checks`, `pr-rules`, `analyze (java-kotlin)`, `analyze (actions)`, `ui-tests (phone-31)`, `ui-tests (phone-37)`, `ui-tests (tablet-37)`, `release-smoke`, or the project's list) are green and the branch is up to date with `main`: `gh pr merge <n> --squash`. Then pull `--ff-only` on `main`, remove the worktree, delete the branch, `git fetch --prune`. Review comment threads must be resolved. AI reviews run locally and are optional.
 
 ## Rules and practices
 
@@ -39,7 +39,7 @@ Prefer the Kotlin standard library, the Android platform, AndroidX and Jetpack, 
 1. Latest stable only, from a primary source on the day (`maven-metadata.xml` without alpha, beta, rc, dev, EAP, or the project's release page).
 2. Check compatibility with the toolchain (AGP's Gradle and JDK needs).
 3. Record version, release date, source URL and date in `docs/versions.md`.
-4. Kotlin cap: Kotlin goes no higher than the newest version on https://codeql.github.com/docs/codeql-overview/supported-languages-and-frameworks/. A Dependabot Kotlin bump beyond it stays open until CodeQL lists it.
+4. Kotlin cap: Kotlin goes no higher than the newest version on https://codeql.github.com/docs/codeql-overview/supported-languages-and-frameworks/. A Dependabot Kotlin bump beyond it stays open until CodeQL lists it, and `.github/dependabot.yml` ignores `org.jetbrains.kotlin*` versions above the cap.
 5. Tools come from `mise.toml` and `mise.lock`: `mise install --locked`.
 
 ## Dependabot pull requests (spec §13.13)

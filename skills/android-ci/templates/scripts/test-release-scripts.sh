@@ -156,6 +156,16 @@ settingsTemplateCarriesNoProjectIds() {
   jq -e '.environments.release.reviewers[0].id == 0 and .release_tags.bypass_actors[0].actor_id == 0' "$settings_template" > /dev/null || fail "template ids are not the 0 marker"
 }
 
+settingsRequireEveryUiTestLeg() {
+  local want got c
+  want='["analyze (actions)","analyze (java-kotlin)","checks","pr-rules","release-smoke","ui-tests (phone-31)","ui-tests (phone-37)","ui-tests (tablet-37)"]'
+  got="$(jq -c '[.ruleset.required_status_checks.required_status_checks[].context]' "$settings_template")"
+  [ "$got" = "$want" ] || fail "template required checks are $got"
+  for c in "ui-tests (phone-31)" "ui-tests (phone-37)" "ui-tests (tablet-37)"; do
+    grep -qF "{\"context\": \"$c\", \"integration_id\": 15368}" "$settings_script" || fail "script lacks required check $c"
+  done
+}
+
 settingsMergeFillsTheProjectIds() {
   local d="$work/merge"
   mkdir -p "$d"
@@ -725,6 +735,7 @@ tests=(
   smokeFailsWhenThePackageCannotBeRead
   smokeKeepsAnExplicitPackage
   settingsTemplateCarriesNoProjectIds
+  settingsRequireEveryUiTestLeg
   settingsMergeFillsTheProjectIds
   settingsMergeAppliesTheMainBypassActors
   settingsMergeRejectsBadMainBypassActors
