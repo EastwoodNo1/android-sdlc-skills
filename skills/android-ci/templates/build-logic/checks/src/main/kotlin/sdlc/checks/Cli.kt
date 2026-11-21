@@ -6,7 +6,8 @@ object Cli {
     const val USAGE =
         "usage: checks no-comments <path...> | commit-message <file> | commit-messages <file> | " +
             "pr-body <bodyFile> <labelsFile> | pr-title <titleFile> | tests-changed <pathsFile> <module...> | " +
-            "workflows <path...> | manifest <path> | backup-rules <allowedCsv> <path...>"
+            "workflows <path...> | manifest <path> [--forbid-permission <name>]... [--require-backup] | " +
+            "backup-rules <allowedCsv> <path...>"
 
     fun run(
         args: List<String>,
@@ -58,7 +59,9 @@ object Cli {
                 }
 
                 "manifest" -> {
-                    rest.singleOrNull()?.let { ManifestHardening.validate(readFile(it)) }
+                    val path = rest.firstOrNull()
+                    val policy = manifestPolicy(rest.drop(1))
+                    if (path == null || policy == null) null else ManifestHardening.validate(readFile(path), policy)
                 }
 
                 "backup-rules" -> {
@@ -87,6 +90,31 @@ object Cli {
         }
         errors.forEach(out)
         return if (errors.isEmpty()) 0 else 1
+    }
+
+    private fun manifestPolicy(options: List<String>): ManifestPolicy? {
+        val forbidden = mutableSetOf<String>()
+        var requireBackup = false
+        var index = 0
+        while (index < options.size) {
+            when (options[index]) {
+                "--require-backup" -> {
+                    requireBackup = true
+                }
+
+                "--forbid-permission" -> {
+                    val name = options.getOrNull(index + 1)?.takeIf(String::isNotBlank) ?: return null
+                    forbidden += name
+                    index++
+                }
+
+                else -> {
+                    return null
+                }
+            }
+            index++
+        }
+        return ManifestPolicy(forbidden, requireBackup)
     }
 
     private fun nonBlankLines(text: String) = text.lines().map(String::trim).filter(String::isNotEmpty)

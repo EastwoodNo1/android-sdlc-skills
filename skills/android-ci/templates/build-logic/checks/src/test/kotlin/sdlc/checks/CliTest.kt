@@ -30,6 +30,7 @@ class CliTest {
             "backup-good" to "<full-backup-content><include domain=\"file\" path=\"a\" /></full-backup-content>",
             "backup-bad" to "<full-backup-content><include domain=\"file\" path=\"b/\" /></full-backup-content>",
             "manifest-bad" to manifestXml("""<uses-permission android:name="android.permission.INTERNET" />"""),
+            "manifest-no-backup" to manifestXml("").replace("allowBackup=\"true\"", "allowBackup=\"false\""),
         )
 
     private fun manifestXml(permission: String) =
@@ -173,10 +174,28 @@ class CliTest {
     }
 
     @Test
-    fun manifestViolationExitsOne() {
-        val (code, printed) = run("manifest", "manifest-bad")
+    fun manifestPermissionIsAllowedWithoutAPolicy() {
+        assertEquals(0 to emptyList<String>(), run("manifest", "manifest-bad"))
+    }
+
+    @Test
+    fun manifestForbiddenPermissionExitsOne() {
+        val (code, printed) = run("manifest", "manifest-bad", "--forbid-permission", "android.permission.INTERNET")
         assertEquals(1, code)
         assertTrue("INTERNET" in printed.single())
+    }
+
+    @Test
+    fun manifestTakesRepeatedPermissionsAndRequireBackup() {
+        val args = arrayOf("manifest", "manifest-good", "--forbid-permission", "a.B", "--require-backup", "--forbid-permission", "c.D")
+        assertEquals(0 to emptyList<String>(), run(*args))
+    }
+
+    @Test
+    fun manifestRequireBackupRejectsDisabledBackup() {
+        val (code, printed) = run("manifest", "manifest-no-backup", "--require-backup")
+        assertEquals(1, code)
+        assertTrue("allowBackup" in printed.single())
     }
 
     @Test
@@ -218,6 +237,9 @@ class CliTest {
             arrayOf("workflows"),
             arrayOf("manifest"),
             arrayOf("manifest", "manifest-good", "manifest-bad"),
+            arrayOf("manifest", "manifest-good", "--forbid-permission"),
+            arrayOf("manifest", "manifest-good", "--forbid-permission", ""),
+            arrayOf("manifest", "manifest-good", "--unknown"),
         ).forEach {
             assertEquals(2 to listOf(Cli.USAGE), run(*it), it.toList().toString())
         }

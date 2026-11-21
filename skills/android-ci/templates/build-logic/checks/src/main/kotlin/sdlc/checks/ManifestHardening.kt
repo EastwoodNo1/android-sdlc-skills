@@ -4,6 +4,11 @@ import org.w3c.dom.Element
 import org.xml.sax.SAXException
 import sdlc.checks.SecureXml.elements
 
+data class ManifestPolicy(
+    val forbiddenPermissions: Set<String> = emptySet(),
+    val requireBackup: Boolean = false,
+)
+
 object ManifestHardening {
     private const val ANDROID = "http://schemas.android.com/apk/res/android"
     private val permissionTags = listOf("uses-permission", "uses-permission-sdk-23")
@@ -12,31 +17,42 @@ object ManifestHardening {
         setOf("androidx.profileinstaller.ProfileInstallReceiver" to "android.permission.DUMP")
     private val componentTags = listOf("activity", "activity-alias", "service", "receiver", "provider")
 
-    fun validate(mergedManifestXml: String): List<String> {
+    fun validate(
+        mergedManifestXml: String,
+        policy: ManifestPolicy = ManifestPolicy(),
+    ): List<String> {
         val root =
             try {
                 SecureXml.parse(mergedManifestXml)
             } catch (e: SAXException) {
                 return listOf("manifest is not valid XML: ${e.message}")
             }
-        return permissionErrors(root) + applicationErrors(root) + componentErrors(root)
+        return permissionErrors(root, policy) + applicationErrors(root, policy) + componentErrors(root)
     }
 
-    private fun permissionErrors(root: Element) =
-        permissionTags
-            .flatMap { root.getElementsByTagName(it).elements() }
-            .filter { it.android("name") == "android.permission.INTERNET" }
-            .map { "INTERNET permission is forbidden" }
+    private fun permissionErrors(
+        root: Element,
+        policy: ManifestPolicy,
+    ) = permissionTags
+        .flatMap { root.getElementsByTagName(it).elements() }
+        .map { it.android("name") }
+        .filter { it in policy.forbiddenPermissions }
+        .map { "${it.substringAfterLast('.')} permission is forbidden" }
 
-    private fun applicationErrors(root: Element): List<String> {
+    private fun applicationErrors(
+        root: Element,
+        policy: ManifestPolicy,
+    ): List<String> {
         val applications = root.getElementsByTagName("application").elements()
         if (applications.isEmpty()) return listOf("application element is missing")
         return applications.flatMap { application ->
+            val allowBackup = application.android("allowBackup")
+            val backupOn = allowBackup != "false"
             listOfNotNull(
                 "android:debuggable must not be true".takeIf { application.android("debuggable") == "true" },
-                "android:allowBackup must be true".takeIf { application.android("allowBackup") != "true" },
-                "android:dataExtractionRules must be set".takeIf { application.android("dataExtractionRules").isEmpty() },
-                "android:fullBackupContent must be set".takeIf { application.android("fullBackupContent").isEmpty() },
+                "android:allowBackup must be true".takeIf { policy.requireBackup && allowBackup != "true" },
+                "android:dataExtractionRules must be set".takeIf { backupOn && application.android("dataExtractionRules").isEmpty() },
+                "android:fullBackupContent must be set".takeIf { backupOn && application.android("fullBackupContent").isEmpty() },
             )
         }
     }
