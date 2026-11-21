@@ -67,6 +67,7 @@ dir="$FAKE_DIR"
 echo "$*" >> "$dir/calls.log"
 case "$*" in
   install*|uninstall*|wait-for-device|"logcat -c"|"shell am start"*|"shell uiautomator dump"*) exit 0 ;;
+  "shell pidof "*) cat "$dir/pidof" ;;
   "logcat -d")
     cat "$dir/logcat.txt"
     if [ -s "$dir/over.shown" ] && [ -f "$dir/late-logcat.txt" ] && [ $(($(date +%s) - $(cat "$dir/over.shown"))) -ge 2 ]; then
@@ -91,16 +92,25 @@ esac
 FAKE
   chmod +x "$dir/bin/adb"
   : > "$dir/logcat.txt"
+  printf '1234\n' > "$dir/pidof"
   printf '<hierarchy><node index="0" text="Home" bounds="[0,0][10,10]" /></hierarchy>' > "$dir/dump.xml"
+  printf 'SMOKE_START_TEXT=Start\nSMOKE_RESUME_TEXT=Continue\nSMOKE_DONE_TEXT=All done\n' > "$dir/smoke.conf"
 }
 
-play_dump='<hierarchy><node index="0" text="Play" bounds="[100,200][300,400]" /></hierarchy>'
-over_dump='<hierarchy><node index="0" text="Game over. Score 3" bounds="[0,0][10,10]" /></hierarchy>'
+start_dump='<hierarchy><node index="0" text="Start" bounds="[100,200][300,400]" /></hierarchy>'
+done_dump='<hierarchy><node index="0" text="All done: 3 items" bounds="[0,0][10,10]" /></hierarchy>'
+drawn_dump='<hierarchy><node index="0" text="Welcome" package="com.example.app" bounds="[0,0][10,10]" /></hierarchy>'
 
 run_smoke() {
   local dir="$1"
-  FAKE_DIR="$dir" PATH="$dir/bin:$PATH" PACKAGE="${PACKAGE_UNDER_TEST-com.example.app}" OUT_DIR="$dir/out" SMOKE_TIMEOUT_SECONDS="${SMOKE_TIMEOUT_SECONDS:-2}" SMOKE_SETTLE_SECONDS="${SMOKE_SETTLE_SECONDS:-0}" \
+  FAKE_DIR="$dir" PATH="$dir/bin:$PATH" PACKAGE="${PACKAGE_UNDER_TEST-com.example.app}" SMOKE_ACTIVITY="${SMOKE_ACTIVITY_UNDER_TEST-.MainActivity}" \
+    SMOKE_CONFIG="${SMOKE_CONFIG_UNDER_TEST-$dir/smoke.conf}" OUT_DIR="$dir/out" SMOKE_TIMEOUT_SECONDS="${SMOKE_TIMEOUT_SECONDS:-2}" \
+    SMOKE_SETTLE_SECONDS="${SMOKE_SETTLE_SECONDS:-0}" SMOKE_RUN_SECONDS="${SMOKE_RUN_SECONDS:-0}" \
     "$here/release-smoke.sh" "$unsigned_apk" > "$dir/stdout.txt" 2> "$dir/stderr.txt"
+}
+
+generic() {
+  : > "$1/smoke.conf"
 }
 
 fake_aapt2() {
@@ -114,14 +124,26 @@ smokeDerivesThePackageFromTheApk() {
   need release-smoke.sh
   local d="$work/derive"
   fake_adb "$d"
-  fake_aapt2 "$d" "echo \"package: name='com.example.derived' versionCode='1' versionName='1.0'\""
-  printf '%s' "$play_dump" > "$d/dump.xml"
-  printf '%s' "$over_dump" > "$d/dump-after.xml"
+  fake_aapt2 "$d" "printf '%s\n' \"package: name='com.example.derived' versionCode='1' versionName='1.0'\" \"launchable-activity: name='com.example.derived.HomeActivity'  label='' icon=''\""
+  printf '%s' "$start_dump" > "$d/dump.xml"
+  printf '%s' "$done_dump" > "$d/dump-after.xml"
   local rc=0
-  AAPT2="$d/bin/aapt2" PACKAGE_UNDER_TEST='' SMOKE_TIMEOUT_SECONDS=10 run_smoke "$d" || rc=$?
+  AAPT2="$d/bin/aapt2" PACKAGE_UNDER_TEST='' SMOKE_ACTIVITY_UNDER_TEST='' SMOKE_TIMEOUT_SECONDS=10 run_smoke "$d" || rc=$?
   expect_status 0 "$rc" "smoke with a derived package"
   expect_in "$d/calls.log" "uninstall com.example.derived"
-  expect_in "$d/calls.log" "shell am start -W -n com.example.derived/.MainActivity"
+  expect_in "$d/calls.log" "shell am start -W -n com.example.derived/com.example.derived.HomeActivity"
+}
+
+smokeFailsWhenTheActivityCannotBeRead() {
+  need release-smoke.sh
+  local d="$work/noActivity"
+  fake_adb "$d"
+  fake_aapt2 "$d" "echo \"package: name='com.example.app' versionCode='1' versionName='1.0'\""
+  local rc=0
+  AAPT2="$d/bin/aapt2" SMOKE_ACTIVITY_UNDER_TEST='' run_smoke "$d" || rc=$?
+  expect_nonzero "$rc" "smoke without a launchable activity"
+  expect_in "$d/stderr.txt" "cannot read the launchable activity"
+  [ ! -s "$d/calls.log" ] || fail "adb was called before the activity was known"
 }
 
 smokeFailsWhenThePackageCannotBeRead() {
@@ -141,8 +163,8 @@ smokeKeepsAnExplicitPackage() {
   local d="$work/explicit"
   fake_adb "$d"
   fake_aapt2 "$d" "echo should-not-run >&2; exit 1"
-  printf '%s' "$play_dump" > "$d/dump.xml"
-  printf '%s' "$over_dump" > "$d/dump-after.xml"
+  printf '%s' "$start_dump" > "$d/dump.xml"
+  printf '%s' "$done_dump" > "$d/dump-after.xml"
   local rc=0
   AAPT2="$d/bin/aapt2" SMOKE_TIMEOUT_SECONDS=10 run_smoke "$d" || rc=$?
   expect_status 0 "$rc" "smoke with an explicit package"
@@ -286,27 +308,27 @@ signApkNeverPrintsSecrets() {
   fi
 }
 
-noPlayButtonFailsTheSmoke() {
+noStartNodeFailsTheSmoke() {
   need release-smoke.sh
-  local d="$work/noplay"
+  local d="$work/nostart"
   fake_adb "$d"
   local rc=0
   run_smoke "$d" || rc=$?
-  expect_nonzero "$rc" "no Play node"
-  expect_in "$d/stderr.txt" "smoke failed: no Play node found"
+  expect_nonzero "$rc" "no Start node"
+  expect_in "$d/stderr.txt" "smoke failed: no \"Start\" node found"
   expect_reached_launch "$d"
-  [ ! -s "$d/taps.log" ] || fail "a tap was recorded without a Play node"
+  [ ! -s "$d/taps.log" ] || fail "a tap was recorded without a Start node"
 }
 
-missingGameOverFailsTheSmoke() {
+missingDoneTextFailsTheSmoke() {
   need release-smoke.sh
-  local d="$work/nogameover"
+  local d="$work/nodone"
   fake_adb "$d"
-  printf '%s' "$play_dump" > "$d/dump.xml"
+  printf '%s' "$start_dump" > "$d/dump.xml"
   local rc=0
   run_smoke "$d" || rc=$?
-  expect_nonzero "$rc" "no game over"
-  expect_in "$d/stderr.txt" "smoke failed: no game over"
+  expect_nonzero "$rc" "no done text"
+  expect_in "$d/stderr.txt" "smoke failed: \"All done\" not reached"
   expect_reached_launch "$d"
   [ "$(wc -l < "$d/taps.log")" -eq 1 ] || fail "expected exactly one tap"
 }
@@ -315,8 +337,8 @@ fatalExceptionFailsTheSmoke() {
   need release-smoke.sh
   local d="$work/fatal"
   fake_adb "$d"
-  printf '%s' "$play_dump" > "$d/dump.xml"
-  printf '%s' "$over_dump" > "$d/dump-after.xml"
+  printf '%s' "$start_dump" > "$d/dump.xml"
+  printf '%s' "$done_dump" > "$d/dump-after.xml"
   printf '11-02 10:00:00.000 E AndroidRuntime: FATAL EXCEPTION: main\n' > "$d/logcat.txt"
   local rc=0
   SMOKE_TIMEOUT_SECONDS=10 run_smoke "$d" || rc=$?
@@ -329,47 +351,47 @@ smokePassesAndKeepsEvidence() {
   need release-smoke.sh
   local d="$work/pass"
   fake_adb "$d"
-  printf '%s' "$play_dump" > "$d/dump.xml"
-  printf '%s' "$over_dump" > "$d/dump-after.xml"
+  printf '%s' "$start_dump" > "$d/dump.xml"
+  printf '%s' "$done_dump" > "$d/dump-after.xml"
   local rc=0
   SMOKE_TIMEOUT_SECONDS=10 run_smoke "$d" || rc=$?
   expect_status 0 "$rc" "clean smoke"
   [ "$(wc -l < "$d/taps.log")" -eq 1 ] || fail "expected exactly one tap"
-  grep -q 'input tap 200 300' "$d/taps.log" || fail "tap was not at the centre of the Play node"
-  for file in ui-dump.xml logcat.txt game-over.png; do
+  grep -q 'input tap 200 300' "$d/taps.log" || fail "tap was not at the centre of the Start node"
+  for file in ui-dump.xml logcat.txt smoke-end.png; do
     [ -f "$d/out/$file" ] || fail "missing evidence file $file"
   done
 }
 
-crashAfterGameOverFailsTheSmoke() {
+crashAfterDoneFailsTheSmoke() {
   need release-smoke.sh
   local d="$work/lateCrash"
   fake_adb "$d"
-  printf '%s' "$play_dump" > "$d/dump.xml"
-  printf '%s' "$over_dump" > "$d/dump-after.xml"
+  printf '%s' "$start_dump" > "$d/dump.xml"
+  printf '%s' "$done_dump" > "$d/dump-after.xml"
   printf '11-02 10:00:05.000 E AndroidRuntime: FATAL EXCEPTION: main\n' > "$d/late-logcat.txt"
   local rc=0
   SMOKE_TIMEOUT_SECONDS=10 SMOKE_SETTLE_SECONDS=2 run_smoke "$d" || rc=$?
-  expect_nonzero "$rc" "crash after game over"
+  expect_nonzero "$rc" "crash after done"
   expect_in "$d/stderr.txt" "smoke failed: FATAL EXCEPTION"
   expect_reached_launch "$d"
 }
 
-ignoresPlayAgainAndContentDesc() {
+ignoresStartLookalikesAndContentDesc() {
   need release-smoke.sh
   local d="$work/lookalikes"
   fake_adb "$d"
-  printf '%s' '<hierarchy><node index="0" text="Play again" bounds="[1,2][3,4]" /><node index="1" text="" content-desc="Play" bounds="[5,6][7,8]" /></hierarchy>' > "$d/dump.xml"
+  printf '%s' '<hierarchy><node index="0" text="Start again" bounds="[1,2][3,4]" /><node index="1" text="" content-desc="Start" bounds="[5,6][7,8]" /></hierarchy>' > "$d/dump.xml"
   local rc=0
   run_smoke "$d" || rc=$?
   expect_nonzero "$rc" "look-alike nodes"
-  expect_in "$d/stderr.txt" "smoke failed: no Play node found"
+  expect_in "$d/stderr.txt" "smoke failed: no \"Start\" node found"
   [ ! -s "$d/taps.log" ] || fail "a tap was recorded for a look-alike node"
-  printf '%s' '<hierarchy><node index="0" text="Play again" bounds="[1,2][3,4]" /><node index="1" text="Play" bounds="[100,200][300,400]" /></hierarchy>' > "$d/dump.xml"
+  printf '%s' '<hierarchy><node index="0" text="Start again" bounds="[1,2][3,4]" /><node index="1" text="Start" bounds="[100,200][300,400]" /></hierarchy>' > "$d/dump.xml"
   rc=0
   run_smoke "$d" || rc=$?
   [ "$(wc -l < "$d/taps.log")" -eq 1 ] || fail "expected exactly one tap"
-  grep -q 'input tap 200 300' "$d/taps.log" || fail "tapped something other than the Play node"
+  grep -q 'input tap 200 300' "$d/taps.log" || fail "tapped something other than the Start node"
 }
 
 dismissesTheFullScreenConfirmation() {
@@ -378,26 +400,26 @@ dismissesTheFullScreenConfirmation() {
   fake_adb "$d"
   local overlay='<node index="0" text="Viewing full screen" package="android" bounds="[100,50][900,100]" /><node index="1" text="To exit, swipe down from the top." package="android" bounds="[100,100][900,150]" /><node index="2" text="Got it" resource-id="android:id/ok" package="android" bounds="[800,100][1000,200]" />'
   printf '<hierarchy>%s</hierarchy>' "$overlay" > "$d/dump.xml"
-  printf '%s' "$play_dump" > "$d/dump-1.xml"
-  printf '%s' "$over_dump" > "$d/dump-after.xml"
+  printf '%s' "$start_dump" > "$d/dump-1.xml"
+  printf '%s' "$done_dump" > "$d/dump-after.xml"
   local rc=0
   SMOKE_TIMEOUT_SECONDS=10 run_smoke "$d" || rc=$?
   expect_status 0 "$rc" "smoke behind the confirmation"
   [ "$(wc -l < "$d/taps.log")" -eq 2 ] || fail "expected two taps"
   sed -n 1p "$d/taps.log" | grep -q 'input tap 900 150' || fail "first tap was not on Got it"
-  sed -n 2p "$d/taps.log" | grep -q 'input tap 200 300' || fail "second tap was not on Play"
+  sed -n 2p "$d/taps.log" | grep -q 'input tap 200 300' || fail "second tap was not on Start"
 }
 
-dismissesTheConfirmationAfterPlay() {
+dismissesTheConfirmationAfterStart() {
   need release-smoke.sh
   local d="$work/immersiveLate"
   fake_adb "$d"
-  printf '%s' "$play_dump" > "$d/dump.xml"
+  printf '%s' "$start_dump" > "$d/dump.xml"
   printf '<hierarchy><node index="0" text="Got it" package="com.android.systemui" bounds="[800,100][1000,200]" /></hierarchy>' > "$d/dump-1.xml"
-  printf '%s' "$over_dump" > "$d/dump-after.xml"
+  printf '%s' "$done_dump" > "$d/dump-after.xml"
   local rc=0
   SMOKE_TIMEOUT_SECONDS=10 run_smoke "$d" || rc=$?
-  expect_status 0 "$rc" "smoke with the confirmation after Play"
+  expect_status 0 "$rc" "smoke with the confirmation after Start"
   [ "$(wc -l < "$d/taps.log")" -eq 2 ] || fail "expected two taps"
 }
 
@@ -405,52 +427,52 @@ resumesAfterAnInterruption() {
   need release-smoke.sh
   local d="$work/interrupted"
   fake_adb "$d"
-  printf '%s' "$play_dump" > "$d/dump.xml"
-  printf '<hierarchy><node index="0" text="Paused" package="com.example.app" bounds="[0,0][10,10]" /><node index="1" text="Resume" package="com.example.app" bounds="[474,1082][608,1135]" /></hierarchy>' > "$d/dump-1.xml"
-  printf '%s' "$over_dump" > "$d/dump-after.xml"
+  printf '%s' "$start_dump" > "$d/dump.xml"
+  printf '<hierarchy><node index="0" text="Paused" package="com.example.app" bounds="[0,0][10,10]" /><node index="1" text="Continue" package="com.example.app" bounds="[474,1082][608,1135]" /></hierarchy>' > "$d/dump-1.xml"
+  printf '%s' "$done_dump" > "$d/dump-after.xml"
   local rc=0
   SMOKE_TIMEOUT_SECONDS=10 run_smoke "$d" || rc=$?
-  expect_status 0 "$rc" "smoke after a system dialog paused the game"
+  expect_status 0 "$rc" "smoke after a system dialog paused the app"
   [ "$(wc -l < "$d/taps.log")" -eq 2 ] || fail "expected two taps"
-  grep -qF 'shell input tap 541 1108' "$d/taps.log" || fail "did not tap Resume"
+  grep -qF 'shell input tap 541 1108' "$d/taps.log" || fail "did not tap Continue"
 }
 
-tapsPlayAgainWhenTheTapWasLost() {
+tapsStartAgainWhenTheTapWasLost() {
   need release-smoke.sh
-  local d="$work/lostPlay"
+  local d="$work/lostStart"
   fake_adb "$d"
-  printf '%s' "$play_dump" > "$d/dump.xml"
-  printf '%s' "$play_dump" > "$d/dump-1.xml"
-  printf '%s' "$over_dump" > "$d/dump-after.xml"
+  printf '%s' "$start_dump" > "$d/dump.xml"
+  printf '%s' "$start_dump" > "$d/dump-1.xml"
+  printf '%s' "$done_dump" > "$d/dump-after.xml"
   local rc=0
   SMOKE_TIMEOUT_SECONDS=20 run_smoke "$d" || rc=$?
-  expect_status 0 "$rc" "smoke after a lost Play tap"
+  expect_status 0 "$rc" "smoke after a lost Start tap"
   [ "$(wc -l < "$d/taps.log")" -eq 2 ] || fail "expected two taps"
-  [ "$(grep -c 'input tap 200 300' "$d/taps.log")" -eq 2 ] || fail "both taps were not on Play"
+  [ "$(grep -c 'input tap 200 300' "$d/taps.log")" -eq 2 ] || fail "both taps were not on Start"
 }
 
-stopsTappingPlayAfterThreeTries() {
+stopsTappingStartAfterThreeTries() {
   need release-smoke.sh
-  local d="$work/deadPlay"
+  local d="$work/deadStart"
   fake_adb "$d"
-  printf '%s' "$play_dump" > "$d/dump.xml"
+  printf '%s' "$start_dump" > "$d/dump.xml"
   local rc=0
   SMOKE_TIMEOUT_SECONDS=30 run_smoke "$d" || rc=$?
-  expect_nonzero "$rc" "Play never starts a round"
-  expect_in "$d/stderr.txt" "smoke failed: no game over"
-  [ "$(wc -l < "$d/taps.log")" -eq 3 ] || fail "expected exactly three Play taps"
+  expect_nonzero "$rc" "Start never leads anywhere"
+  expect_in "$d/stderr.txt" "smoke failed: \"All done\" not reached"
+  [ "$(wc -l < "$d/taps.log")" -eq 3 ] || fail "expected exactly three Start taps"
 }
 
-ignoresResumeFromOtherPackages() {
+ignoresContinueFromOtherPackages() {
   need release-smoke.sh
-  local d="$work/otherResume"
+  local d="$work/otherContinue"
   fake_adb "$d"
-  printf '%s' "$play_dump" > "$d/dump.xml"
-  printf '<hierarchy><node index="0" text="Resume" package="some.other.app" bounds="[474,1082][608,1135]" /></hierarchy>' > "$d/dump-1.xml"
+  printf '%s' "$start_dump" > "$d/dump.xml"
+  printf '<hierarchy><node index="0" text="Continue" package="some.other.app" bounds="[474,1082][608,1135]" /></hierarchy>' > "$d/dump-1.xml"
   local rc=0
   run_smoke "$d" || rc=$?
-  expect_nonzero "$rc" "Resume from another package"
-  [ "$(wc -l < "$d/taps.log")" -eq 1 ] || fail "tapped a Resume that is not the app's"
+  expect_nonzero "$rc" "Continue from another package"
+  [ "$(wc -l < "$d/taps.log")" -eq 1 ] || fail "tapped a Continue that is not the app's"
 }
 
 ignoresGotItFromOtherPackages() {
@@ -471,7 +493,7 @@ timeoutNamesTheLastDumpTexts() {
   printf '<hierarchy><node index="0" text="Viewing full screen" package="x" bounds="[0,0][1,1]" /><node index="1" text="Other" package="x" bounds="[0,0][1,1]" /></hierarchy>' > "$d/dump.xml"
   local rc=0
   run_smoke "$d" || rc=$?
-  expect_nonzero "$rc" "no Play node"
+  expect_nonzero "$rc" "no Start node"
   expect_in "$d/stderr.txt" "last dump texts: Viewing full screen, Other"
 }
 
@@ -482,8 +504,135 @@ lastTextsKeepCommasInsideATextTogether() {
   printf '<hierarchy><node index="0" text="To exit, swipe down from the top." package="x" bounds="[0,0][1,1]" /><node index="1" text="Got it" package="x" bounds="[0,0][1,1]" /></hierarchy>' > "$d/dump.xml"
   local rc=0
   run_smoke "$d" || rc=$?
-  expect_nonzero "$rc" "no Play node"
+  expect_nonzero "$rc" "no Start node"
   expect_in "$d/stderr.txt" "last dump texts: To exit, swipe down from the top., Got it"
+}
+
+genericSmokePassesWhenTheAppDrawsAndStaysUp() {
+  need release-smoke.sh
+  local d="$work/genericPass"
+  fake_adb "$d"
+  generic "$d"
+  printf '%s' "$drawn_dump" > "$d/dump.xml"
+  local rc=0
+  run_smoke "$d" || rc=$?
+  expect_status 0 "$rc" "generic smoke"
+  expect_in "$d/stdout.txt" "smoke passed: com.example.app drew its window and kept running"
+  expect_in "$d/calls.log" "shell pidof com.example.app"
+  [ ! -s "$d/taps.log" ] || fail "the generic smoke tapped something"
+  for file in ui-dump.xml logcat.txt smoke-end.png; do
+    [ -f "$d/out/$file" ] || fail "missing evidence file $file"
+  done
+}
+
+genericSmokeWithoutAConfigFile() {
+  need release-smoke.sh
+  local d="$work/genericNoFile"
+  fake_adb "$d"
+  printf '%s' "$drawn_dump" > "$d/dump.xml"
+  local rc=0
+  SMOKE_CONFIG_UNDER_TEST="$d/missing.conf" run_smoke "$d" || rc=$?
+  expect_status 0 "$rc" "generic smoke without a config file"
+  [ ! -s "$d/taps.log" ] || fail "the generic smoke tapped something"
+}
+
+genericSmokeFailsWhenTheAppNeverDraws() {
+  need release-smoke.sh
+  local d="$work/genericNoWindow"
+  fake_adb "$d"
+  generic "$d"
+  printf '<hierarchy><node index="0" text="Welcome" package="com.android.launcher" bounds="[0,0][10,10]" /></hierarchy>' > "$d/dump.xml"
+  local rc=0
+  run_smoke "$d" || rc=$?
+  expect_nonzero "$rc" "app never drew"
+  expect_in "$d/stderr.txt" "smoke failed: com.example.app drew no window within 2s"
+}
+
+genericSmokeFailsWhenTheProcessDies() {
+  need release-smoke.sh
+  local d="$work/genericDied"
+  fake_adb "$d"
+  generic "$d"
+  printf '%s' "$drawn_dump" > "$d/dump.xml"
+  : > "$d/pidof"
+  local rc=0
+  run_smoke "$d" || rc=$?
+  expect_nonzero "$rc" "process died"
+  expect_in "$d/stderr.txt" "smoke failed: com.example.app is not running"
+}
+
+genericSmokeFailsOnAnAnr() {
+  need release-smoke.sh
+  local d="$work/genericAnr"
+  fake_adb "$d"
+  generic "$d"
+  printf '%s' "$drawn_dump" > "$d/dump.xml"
+  printf '11-02 10:00:00.000 E ActivityManager: ANR in com.example.app (com.example.app/.MainActivity)\n' > "$d/logcat.txt"
+  local rc=0
+  run_smoke "$d" || rc=$?
+  expect_nonzero "$rc" "ANR"
+  expect_in "$d/stderr.txt" "smoke failed: ANR in com.example.app"
+}
+
+genericSmokeFailsOnAFatalException() {
+  need release-smoke.sh
+  local d="$work/genericFatal"
+  fake_adb "$d"
+  generic "$d"
+  printf '%s' "$drawn_dump" > "$d/dump.xml"
+  printf '11-02 10:00:00.000 E AndroidRuntime: FATAL EXCEPTION: main\n' > "$d/logcat.txt"
+  local rc=0
+  run_smoke "$d" || rc=$?
+  expect_nonzero "$rc" "FATAL EXCEPTION"
+  expect_in "$d/stderr.txt" "smoke failed: FATAL EXCEPTION"
+}
+
+configRejectsAnUnknownKey() {
+  need release-smoke.sh
+  local d="$work/badKey"
+  fake_adb "$d"
+  printf 'SMOKE_START_TEXT=Start\nrm -rf /=x\n' > "$d/smoke.conf"
+  local rc=0
+  run_smoke "$d" || rc=$?
+  expect_nonzero "$rc" "unknown key"
+  expect_in "$d/stderr.txt" "unknown key"
+  [ ! -s "$d/calls.log" ] || fail "adb was called with a bad config"
+}
+
+configNeedsADoneTextForAStartText() {
+  need release-smoke.sh
+  local d="$work/startOnly"
+  fake_adb "$d"
+  printf 'SMOKE_START_TEXT=Start\n' > "$d/smoke.conf"
+  local rc=0
+  run_smoke "$d" || rc=$?
+  expect_nonzero "$rc" "start text without done text"
+  expect_in "$d/stderr.txt" "SMOKE_START_TEXT and SMOKE_RESUME_TEXT need SMOKE_DONE_TEXT"
+}
+
+environmentWinsOverTheConfigFile() {
+  need release-smoke.sh
+  local d="$work/envWins"
+  fake_adb "$d"
+  printf '%s' '<hierarchy><node index="0" text="Go" bounds="[100,200][300,400]" /></hierarchy>' > "$d/dump.xml"
+  printf '%s' "$done_dump" > "$d/dump-after.xml"
+  local rc=0
+  SMOKE_START_TEXT=Go SMOKE_TIMEOUT_SECONDS=10 run_smoke "$d" || rc=$?
+  expect_status 0 "$rc" "smoke with the start text from the environment"
+  grep -q 'input tap 200 300' "$d/taps.log" || fail "did not tap the Go node"
+}
+
+doneTextWithoutAStartTextOnlyWaits() {
+  need release-smoke.sh
+  local d="$work/doneOnly"
+  fake_adb "$d"
+  printf 'SMOKE_DONE_TEXT=All done\n' > "$d/smoke.conf"
+  printf '%s' "$done_dump" > "$d/dump.xml"
+  local rc=0
+  run_smoke "$d" || rc=$?
+  expect_status 0 "$rc" "smoke that only waits for the done text"
+  [ ! -s "$d/taps.log" ] || fail "tapped without a start text"
+  expect_in "$d/stdout.txt" 'smoke passed: "All done" reached'
 }
 
 signer_digest() {
@@ -705,17 +854,17 @@ tests=(
   wrongAliasFails
   missingKeystoreFails
   signApkNeverPrintsSecrets
-  noPlayButtonFailsTheSmoke
-  missingGameOverFailsTheSmoke
+  noStartNodeFailsTheSmoke
+  missingDoneTextFailsTheSmoke
   fatalExceptionFailsTheSmoke
-  crashAfterGameOverFailsTheSmoke
-  ignoresPlayAgainAndContentDesc
+  crashAfterDoneFailsTheSmoke
+  ignoresStartLookalikesAndContentDesc
   dismissesTheFullScreenConfirmation
-  dismissesTheConfirmationAfterPlay
+  dismissesTheConfirmationAfterStart
   resumesAfterAnInterruption
-  tapsPlayAgainWhenTheTapWasLost
-  stopsTappingPlayAfterThreeTries
-  ignoresResumeFromOtherPackages
+  tapsStartAgainWhenTheTapWasLost
+  stopsTappingStartAfterThreeTries
+  ignoresContinueFromOtherPackages
   ignoresGotItFromOtherPackages
   timeoutNamesTheLastDumpTexts
   lastTextsKeepCommasInsideATextTogether
@@ -734,6 +883,17 @@ tests=(
   smokeDerivesThePackageFromTheApk
   smokeFailsWhenThePackageCannotBeRead
   smokeKeepsAnExplicitPackage
+  smokeFailsWhenTheActivityCannotBeRead
+  genericSmokePassesWhenTheAppDrawsAndStaysUp
+  genericSmokeWithoutAConfigFile
+  genericSmokeFailsWhenTheAppNeverDraws
+  genericSmokeFailsWhenTheProcessDies
+  genericSmokeFailsOnAnAnr
+  genericSmokeFailsOnAFatalException
+  configRejectsAnUnknownKey
+  configNeedsADoneTextForAStartText
+  environmentWinsOverTheConfigFile
+  doneTextWithoutAStartTextOnlyWaits
   settingsTemplateCarriesNoProjectIds
   settingsRequireEveryUiTestLeg
   settingsMergeFillsTheProjectIds
