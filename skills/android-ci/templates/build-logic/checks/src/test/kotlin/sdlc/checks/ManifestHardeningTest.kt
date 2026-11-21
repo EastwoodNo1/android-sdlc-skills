@@ -39,11 +39,16 @@ class ManifestHardeningTest {
         </manifest>
         """.trimIndent()
 
+    private val offline = ManifestPolicy(forbiddenPermissions = setOf("android.permission.INTERNET"))
+
+    private val backupRequired = ManifestPolicy(requireBackup = true)
+
     private fun assertOneError(
         fragment: String,
         xml: String,
+        policy: ManifestPolicy = ManifestPolicy(),
     ) {
-        val errors = ManifestHardening.validate(xml)
+        val errors = ManifestHardening.validate(xml, policy)
         assertEquals(1, errors.size, errors.toString())
         assertTrue(fragment in errors.single(), errors.single())
     }
@@ -54,21 +59,41 @@ class ManifestHardeningTest {
     }
 
     @Test
-    fun internetPermissionIsRejected() {
+    fun internetPermissionIsAcceptedByDefault() {
         val permission = """<uses-permission android:name="android.permission.INTERNET" />"""
-        assertOneError("INTERNET", manifest(permissions = permission))
+        assertEquals(emptyList(), ManifestHardening.validate(manifest(permissions = permission)))
     }
 
     @Test
-    fun internetPermissionFromSdk23IsRejected() {
+    fun forbiddenPermissionIsRejected() {
+        val permission = """<uses-permission android:name="android.permission.INTERNET" />"""
+        assertOneError("INTERNET permission is forbidden", manifest(permissions = permission), offline)
+    }
+
+    @Test
+    fun forbiddenPermissionFromSdk23IsRejected() {
         val permission = """<uses-permission-sdk-23 android:name="android.permission.INTERNET" />"""
-        assertOneError("INTERNET", manifest(permissions = permission))
+        assertOneError("INTERNET", manifest(permissions = permission), offline)
+    }
+
+    @Test
+    fun everyForbiddenPermissionIsReported() {
+        val permissions =
+            """
+            <uses-permission android:name="android.permission.INTERNET" />
+            <uses-permission android:name="android.permission.CAMERA" />
+            """.trimIndent()
+        val policy = ManifestPolicy(forbiddenPermissions = setOf("android.permission.INTERNET", "android.permission.CAMERA"))
+        assertEquals(
+            listOf("INTERNET permission is forbidden", "CAMERA permission is forbidden"),
+            ManifestHardening.validate(manifest(permissions = permissions), policy),
+        )
     }
 
     @Test
     fun otherPermissionsAreAccepted() {
         val permission = """<uses-permission android:name="android.permission.VIBRATE" />"""
-        assertEquals(emptyList(), ManifestHardening.validate(manifest(permissions = permission)))
+        assertEquals(emptyList(), ManifestHardening.validate(manifest(permissions = permission), offline))
     }
 
     @Test
@@ -209,8 +234,26 @@ class ManifestHardeningTest {
     }
 
     @Test
-    fun disabledBackupIsRejected() {
-        assertOneError("allowBackup", manifest(applicationAttributes.replace("allowBackup=\"true\"", "allowBackup=\"false\"")))
+    fun disabledBackupWithoutRulesIsAcceptedByDefault() {
+        assertEquals(emptyList(), ManifestHardening.validate(manifest("""android:allowBackup="false"""")))
+    }
+
+    @Test
+    fun disabledBackupIsRejectedWhenBackupIsRequired() {
+        val attrs = applicationAttributes.replace("allowBackup=\"true\"", "allowBackup=\"false\"")
+        assertOneError("allowBackup", manifest(attrs), backupRequired)
+    }
+
+    @Test
+    fun unsetAllowBackupStillNeedsRules() {
+        val errors = ManifestHardening.validate(manifest(""))
+        assertEquals(listOf("android:dataExtractionRules must be set", "android:fullBackupContent must be set"), errors)
+    }
+
+    @Test
+    fun unsetAllowBackupIsRejectedWhenBackupIsRequired() {
+        val attrs = applicationAttributes.lines().filterNot { "allowBackup" in it }.joinToString("\n")
+        assertOneError("allowBackup", manifest(attrs), backupRequired)
     }
 
     @Test
@@ -237,7 +280,7 @@ class ManifestHardeningTest {
     fun attributesInAnotherNamespaceAreIgnored() {
         val attrs = applicationAttributes.replace("android:allowBackup", "other:allowBackup")
         val xml = manifest(attrs).replace("<manifest ", "<manifest xmlns:other=\"urn:other\" ")
-        assertOneError("allowBackup", xml)
+        assertOneError("allowBackup", xml, backupRequired)
     }
 
     @Test

@@ -155,10 +155,12 @@ val releaseManifest =
             .path
     }
 
+val manifestPolicy = emptyList<String>()
+
 registerCheck(
     "checkReleaseManifest",
     "Fails when the merged release manifest is not hardened.",
-    releaseManifest.map { listOf("manifest", it) },
+    releaseManifest.map { listOf("manifest", it) + manifestPolicy },
 ).configure {
     dependsOn(processReleaseMainManifest)
 }
